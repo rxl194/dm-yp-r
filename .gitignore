@@ -1,0 +1,9 @@
+.RData*
+*.RData
+.Rproj.user
+.Rhistory
+*.zip
+topicmodel_by_cuisine.R
+topicmodel_selection.R
+topicmodel_visualization.R
+*.RProj

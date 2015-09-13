@@ -1,0 +1,263 @@
+---
+title: "Exploratory Analysis of  Yelp Restaurant Reviews"
+author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
+output:
+  html_document: 
+    fig_caption: yes
+  pdf_document:
+    fig_caption: yes
+    keep_tex: yes
+    number_sections: yes
+---
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+
+require(topicmodels)
+
+require(dplyr)
+
+require(tidyr)
+
+require(ggplot2)
+
+require(R.utils)
+
+require(igraph)
+
+require(stringr)
+
+
+if(!require(segmented)){
+  install.packages("segmented")
+}
+
+require(segmented)
+
+require(wordcloud)
+
+source("../scripts/igraph.plot2.R")
+source("../scripts/graph.circular.R")
+
+```
+
+```{r,echo=FALSE}
+
+load("../data/R/review.RData")
+
+load("../data/R/business.RData")
+
+```
+
+## Introduction
+
+
+## Methods
+
+### The Data
+
+```{r echo=FALSE}
+
+load('../data/R/restaurant_ids.RData')
+
+load('../results/language_models/restaurant.reviews.unigram.RData')
+
+```
+
+
+The data used here is part of the [Yelp Dataset Challenge](http://www.yelp.com/dataset_challenge). The dataset is provided as a set of JSON files that include business information, reviews, tips (shorter reviews), user information and checkins. Business objects list name, location, opening hours, category, average star rating,  number of reviews and a series of attributes like noise level wether it takes reservations, etc. Review objects list a star rating, the review text, the review date, and how the review has been voted. This exploratory analysis focuses in this two type of objects.
+
+I have filtered the business by category to keep only those business in the restaurant category (`r length(business_restaurant_id)`) and reviews related to those business (`r length(review_restaurant_id)`).
+
+The texts from restaurant reviews will constitute our corpus in this work.
+
+### Corpus and language model
+
+I have processed each of the reviews to build a bag of words language model. To create this model I preprocessed each document in the corpus as follows:
+
+- Remove non writable characters.
+- Strip extra white spaces.
+- Lower case.
+- Remove punctuation
+- Remove numbers
+- Stemming
+- Stop words removal.
+
+After that each text was tokenized into unigrams and the unigram frequencies were counted and stored into a document-term matrix of counts.
+
+Term frequencies across all the corpus showed a typical Zipf distribution. I kept the most frequent terms that, summing all their frequencies, accounted for about 99% of the total number of words in the courpus. The resulting vocavulary has `r ncol(dtm.restaurant.review.unigram)` words.
+
+### Topic model
+
+To discover latent topics in our corpus, I run a Latent Dirichlet Allocation algorithm (LDA) using the document-term frequencies matrix as input. To estimate the model parameters we used a Gibbs sampling with a burn-in phase of 1000 iterations and later the distribution was sampled every 100 iterations during 2000 iterations. In order to select the number of topics (k), I run LDA on 20% of the documents in the corpus (M=`r round(0.2*nrow(dtm.restaurant.review.unigram))`) using different k values. Figure 1 shows the log-likelihood for a range of k values.
+
+I selected to use 20 topics by fitting a three-segment linear regression and selecting the number of topics about the middle of the second segment. This method, similar to the elbow rule, seeks to get a simple model with enough flexibility.
+
+```{r,echo=FALSE}
+rm(k)
+data.dir <- '../results/topic_models/exploratory/'
+
+files <- list.files(data.dir)
+
+ll <- rbind_all(lapply(files,function(file){
+  
+  
+  var <- load(file.path(data.dir,file))
+  
+  data.frame(ll=ll,k=k)
+  
+}))
+
+seg<- segmented(lm(ll~k,ll), ~k, c(median(ll$k),median(ll$k)+10))
+
+seg.k <- c(2,seg$psi[,2],max(ll$k))
+
+seg.points <- data.frame(k=seg.k,ll=predict(seg,data.frame(k=seg.k)))
+
+ggplot(ll,aes(x=k,y=ll))+geom_point()+geom_line(data=seg.points,color='red')+ylab("Log-likelihood")+xlab("# Topics")+ggtitle("Topic Model Log-likelihood for 20% Restaurant Reviews")
+
+
+```
+
+
+## Results
+
+First, I will examine the results of fitting a topics model to the whole restaurant reviews corpus. Second, I'll show the results of running the same analysis over two corpus, one for positive restaurant reviews and another for negative restaurant reviews.
+
+### Overall topics
+
+```{r,echo=FALSE}
+
+load('../results/topic_models/exploratory/review_topics_LDA_Gibbs_k_20.RData')
+
+
+
+```
+
+
+Most of the 20 topics obtained are well defined. Figure 2 shows them and the 4 most frequent word on each topic. Color luminance shows relative in-topic relevance of each term, being the most bright the most frequent term. There is only one topic that I couldn't identify.
+
+There are several topics about the costumer experience: Dissapointed, Love, Returning, Waiting, Good service, Nice, Take Away and good place for a Special Dinner.
+
+The remaining topics focus on the type of restaurant, according to their cuisine type: American, Asian, Mexican, Italian, Sushi; or other features like Buffets, Location and Ambient.
+
+There is a "No restaurant" topic because, although all the reviews are for business labeled as restaurants, some of them are not. This topic is relevant in other type of businessess like hotels. Also, the "Nightlife" topic focuses in clubs, music venues and other businessess related with night entertainment, but that are not restaurants.
+
+
+
+```{r overall topic model ,echo=FALSE,fig.width=8.5,fig.height=8.5,fig.cap="Figure 2. Topic model for Yelp restaurant reviews. Color luminance shows relative in-topic relevance of each term, being the most bright the most frequent term."}
+
+k <- 20
+n <- 4
+
+topic.names <- c(Topic.1="Love",Topic.2="Sushi",Topic.3="Location",Topic.4="Breakfast",Topic.5="Not restaurant",Topic.7="Italian",Topic.8="Returning",Topic.9="Waiting",Topic.10="Nightlife",Topic.11="Disappointed",Topic.12="Mexican",Topic.13="Nice",Topic.14="Ambient",Topic.15="Buffet",Topic.16="Special dinner",Topic.17="American",Topic.18="Take away",Topic.19="Good service",Topic.20="Asian")
+
+graph.circular(fit,k,n,topic.names)
+
+
+
+```
+
+
+```{r,echo=FALSE,eval=FALSE}
+
+doc.p <- data.frame(fit@gamma)
+
+review[review$review_id==fit@documents[order(doc.p[,16],decreasing =TRUE)][7],"text"]
+
+
+
+
+```
+
+Since the topic model shows some topics related to cuisine types, I'll investigate how that relates to the number of restaurants that belong to a certaint type of cuisine. Figure 3 shows the relative relevance of each cuisine category in the business data. As we can see the topics found match the most frequent cuisine types.
+
+```{r cuisine word cloud,fig.width=8.5,fig.height=8.5,echo=FALSE, fig.cap= "Figure 3. Word cloud displaying relevance of different cuisine categories."}
+
+load('../data/R/restaurant_reviews_ids_by_cuisine.RData')
+
+wordcloud(num.reviews.by.cuisine$cuisine,num.reviews.by.cuisine$n.reviews,random.order = FALSE,random.color = FALSE,colors=brewer.pal(8,"Dark2"))
+
+
+```
+
+
+### Topics by rating
+
+The overall topic model lists several topics about costumer experience. But positive and negative experiences are mixed because the corpus includes both positive and negative reviews. Now, I'll explore the topics related to positive and negative ratings independently. Figure 4 displays the restaurant review ratings distribution. As we can see, positive reviews (stars >3) dominate over negative reviews (stars <3).
+
+```{r ratings distribution ,echo=FALSE, figure.cap="Figure 4. Restaurant review ratings distribution."}
+
+
+percentages <- review %>% group_by(stars) %>% count(stars) %>% mutate(percentage=n/sum(n)*100,stars=factor(stars))
+
+ggplot(percentages,aes(x="",y=percentage,fill=stars))+geom_bar(width = 1,stat="identity")+coord_polar(theta="y")+geom_text(aes(y = percentage/2 + c(0, cumsum(percentage)[-length(percentage)]), label = paste0(round(percentage),"%")), size=7)+theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid  = element_blank(),
+        panel.background = element_blank()
+        )+ylab("")+xlab("")+scale_fill_discrete(name="Stars")
+
+
+```
+
+```{r,echo=FALSE}
+
+
+
+
+load("../results/topic_models/review_topics_positive_negative.RData")
+
+```
+
+To explore to topics on each category, I have fit two topic model (one for positive reviews and another for negative reviews) with 20 topics following the same methodology that I used for the overall topic model. I didn't include reviews with 3 stars because that rating is not positive nor negative. To avoid an unbalanced number of reviews in each category, I used a random sample for the positive category with size equal to the number of reviews in the negative category (`r nrow(restaurant.reviews.negative.topicmodel)`)
+
+
+
+
+```{r,echo=FALSE,fig.width=8,fig.height=8,fig.cap="Figure 5. Topic model for positive Yelp restaurant reviews. Color luminance shows relative in-topic relevance of each term, being the most bright the most frequent term."}
+
+k <- 20
+n <- 4
+
+topic.names <- c(Topic.1="Service",Topic.2="Buffet Vegas",Topic.3="Burger",Topic.4="Mexican",Topic.5="Nightlife",Topic.6="Italian",Topic.7="American",Topic.8="Good but...",Topic.10="Best food ever",Topic.11="Personal story",Topic.12="Returning",Topic.13="Asian",Topic.14=" Special Dinner",Topic.15="I love...",Topic.17="Sushi",Topic.18="Location",Topic.19="Breakfast",Topic.20="Pretty good")
+
+graph.circular(restaurant.reviews.positive.topicmodel,k,n,topic.names)
+
+
+
+```
+
+
+```{r,echo=FALSE,eval=FALSE}
+
+doc.p <- data.frame(restaurant.reviews.positive.topicmodel@gamma)
+
+review[review$review_id==restaurant.reviews.positive.topicmodel@documents[order(doc.p[,20],decreasing =TRUE)][1],"text"]
+
+
+
+
+```
+
+```{r,echo=FALSE,fig.width=8,fig.height=8,fig.cap="Figure 6. Topic model for Yelp restaurant reviews. Color luminance shows relative in-topic relevance of each term, being the most bright the most frequent term."}
+
+k <- 20
+n <- 4
+
+topic.names <- c(Topic.1="Wrong order",Topic.2="Buffet",Topic.3="Sandwich",Topic.4="Hate it",Topic.5="Ambient",Topic.6="Sushi",Topic.7="Italian",Topic.8="Special dinner",Topic.9="Hotel",Topic.10=" Customer service",Topic.11="American",Topic.12="Not bad",Topic.14="Asian",Topic.15="Wrong rating",Topic.16="Waiting",Topic.17="Nightlife",Topic.18="Service",Topic.19="Breakfast",Topic.20="Worse than...")
+
+graph.circular(restaurant.reviews.negative.topicmodel,k,n,topic.names)
+
+
+
+```
+
+```{r,echo=FALSE,eval=FALSE}
+
+doc.p <- data.frame(restaurant.reviews.negative.topicmodel@gamma)
+
+review[review$review_id==restaurant.reviews.negative.topicmodel@documents[order(doc.p[,20],decreasing =TRUE)][24],"text"]
+
+
+
+
+```
+
