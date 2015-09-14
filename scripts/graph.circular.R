@@ -44,7 +44,7 @@ lab.locs <- insert(lab.locs,seq(1,n*k,n),seq(-pi,pi,length.out = k))
 
 vertex.label.dist <- rep(-0.7,n*k)
 
-vertex.label.dist <- insert(vertex.label.dist,seq(1,n*k,n),rep(0.7,k))
+vertex.label.dist <- insert(vertex.label.dist,seq(1,n*k,n),rep(0.75,k))
 set.seed(100)
 
 

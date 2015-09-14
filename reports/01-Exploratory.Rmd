@@ -2,12 +2,12 @@
 title: "Exploratory Analysis of  Yelp Restaurant Reviews"
 author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
 output:
-  html_document: 
+  html_document:
     fig_caption: yes
   pdf_document:
     fig_caption: yes
+    fig_crop: no
     keep_tex: yes
-    number_sections: yes
 ---
 ```{r,echo=FALSE,warning=FALSE,message=FALSE}
 
@@ -25,6 +25,7 @@ require(igraph)
 
 require(stringr)
 
+require(grid)
 
 if(!require(segmented)){
   install.packages("segmented")
@@ -49,6 +50,10 @@ load("../data/R/business.RData")
 
 ## Introduction
 
+Today, customer reviews in social media have a deep impact on the chances of success of any business [1]. Restaurant customers look for a complete and satisfactory experience regarding food quality, service, and ambient and they often seek the opinion of patrons when they are choosing a place for their next meal. Learning which topics are the most frequent among customer reviews and how they associate to a positive or negative rating can help business improve their offer and have a better chance of succeeding.
+
+In this report, I explore some latent topics in a corpus of Yelp reviews for restaurants.
+
 
 ## Methods
 
@@ -63,17 +68,17 @@ load('../results/language_models/restaurant.reviews.unigram.RData')
 ```
 
 
-The data used here is part of the [Yelp Dataset Challenge](http://www.yelp.com/dataset_challenge). The dataset is provided as a set of JSON files that include business information, reviews, tips (shorter reviews), user information and checkins. Business objects list name, location, opening hours, category, average star rating,  number of reviews and a series of attributes like noise level wether it takes reservations, etc. Review objects list a star rating, the review text, the review date, and how the review has been voted. This exploratory analysis focuses in this two type of objects.
+The data used here is part of the [Yelp Dataset Challenge](http://www.yelp.com/dataset_challenge).The dataset consists of a set of JSON files that include business information, reviews, tips (shorter reviews), user information and check-ins. Business objects list name, location, opening hours, category, average star rating, the number of reviews about the business and a series of attributes like noise level reservations policy, etc. Review objects list a star rating, the review text, the review date, and the number of votes that the review has received. This exploratory analysis focuses on this two type of objects.
 
-I have filtered the business by category to keep only those business in the restaurant category (`r length(business_restaurant_id)`) and reviews related to those business (`r length(review_restaurant_id)`).
+I have filtered the business by category to keep only those businesses in the restaurant category (`r length(business_restaurant_id)`) and reviews related to those businesses (`r length(review_restaurant_id)`).
 
-The texts from restaurant reviews will constitute our corpus in this work.
+The texts from restaurant reviews will form the corpus for this analysis.
 
 ### Corpus and language model
 
 I have processed each of the reviews to build a bag of words language model. To create this model I preprocessed each document in the corpus as follows:
 
-- Remove non writable characters.
+- Remove non-writable characters.
 - Strip extra white spaces.
 - Lower case.
 - Remove punctuation
@@ -81,18 +86,23 @@ I have processed each of the reviews to build a bag of words language model. To 
 - Stemming
 - Stop words removal.
 
-After that each text was tokenized into unigrams and the unigram frequencies were counted and stored into a document-term matrix of counts.
+After that, each text was tokenized into unigrams, and the unigram frequencies were counted and stored into a document-term matrix of counts.
 
-Term frequencies across all the corpus showed a typical Zipf distribution. I kept the most frequent terms that, summing all their frequencies, accounted for about 99% of the total number of words in the courpus. The resulting vocavulary has `r ncol(dtm.restaurant.review.unigram)` words.
+Term counts across all the corpus showed a typical Zipf distribution. I kept the most frequent terms that, summing all their frequencies, accounted for about 99% of the total number of words in the corpus. The resulting vocabulary has `r ncol(dtm.restaurant.review.unigram)` words.
+
+I used the R packages "tm" [3] (v 0.6) and "RWeka" [4] (v 0.4-24) for these steps.
 
 ### Topic model
 
-To discover latent topics in our corpus, I run a Latent Dirichlet Allocation algorithm (LDA) using the document-term frequencies matrix as input. To estimate the model parameters we used a Gibbs sampling with a burn-in phase of 1000 iterations and later the distribution was sampled every 100 iterations during 2000 iterations. In order to select the number of topics (k), I run LDA on 20% of the documents in the corpus (M=`r round(0.2*nrow(dtm.restaurant.review.unigram))`) using different k values. Figure 1 shows the log-likelihood for a range of k values.
+To discover latent themes in our corpus, I run a Latent Dirichlet Allocation [2] algorithm (LDA) using the document-term frequencies matrix as input. To estimate the model parameters we used a Gibbs [5][6] sampling with a burn-in phase of 1000 iterations and later the distribution was sampled every 100 iterations during 2000 iterations. I tested other approaches (LDA with VME parameter estimation and a Correlated Topics Model [7]) but the topics obtained were less clear than the ones resulting from LDA with Gibbs sampling.
 
-I selected to use 20 topics by fitting a three-segment linear regression and selecting the number of topics about the middle of the second segment. This method, similar to the elbow rule, seeks to get a simple model with enough flexibility.
 
-```{r,echo=FALSE}
-rm(k)
+To select the number of topics (k), I run LDA on 20% of the documents in the corpus  (`r format(round(0.2*nrow(dtm.restaurant.review.unigram)),scientific=FALSE)`) using different k values. Figure 1 shows the log-likelihood for a range of values for k.
+
+Finally, I decided to use 20 topics by fitting a three-segment linear regression and selecting the number of topics about the middle of the second segment. This method, similar to the elbow rule, seeks to get a simple model with enough flexibility.
+
+```{r,echo=FALSE, fig.width=6,fig.height=4,fig.cap="Figure 1. Topic model log-likelihood for a range of topic numbers. The red line is a result of fitting a three segment linear regression to the data."}
+
 data.dir <- '../results/topic_models/exploratory/'
 
 files <- list.files(data.dir)
@@ -112,15 +122,16 @@ seg.k <- c(2,seg$psi[,2],max(ll$k))
 
 seg.points <- data.frame(k=seg.k,ll=predict(seg,data.frame(k=seg.k)))
 
-ggplot(ll,aes(x=k,y=ll))+geom_point()+geom_line(data=seg.points,color='red')+ylab("Log-likelihood")+xlab("# Topics")+ggtitle("Topic Model Log-likelihood for 20% Restaurant Reviews")
+ggplot(ll,aes(x=k,y=ll))+geom_point()+geom_line(data=seg.points,color='red')+ylab("Log-likelihood")+xlab("# Topics")
 
 
 ```
 
+I used the R package "topicmodels" [8] (v 0.2) to compute the models in this report.
 
 ## Results
 
-First, I will examine the results of fitting a topics model to the whole restaurant reviews corpus. Second, I'll show the results of running the same analysis over two corpus, one for positive restaurant reviews and another for negative restaurant reviews.
+First, I will examine the results of fitting a topics model to the whole restaurant reviews corpus. Second, I’ll show the results of running the same analysis over two corpora, one for positive restaurant reviews and another for negative restaurant reviews.
 
 ### Overall topics
 
@@ -133,17 +144,16 @@ load('../results/topic_models/exploratory/review_topics_LDA_Gibbs_k_20.RData')
 ```
 
 
-Most of the 20 topics obtained are well defined. Figure 2 shows them and the 4 most frequent word on each topic. Color luminance shows relative in-topic relevance of each term, being the most bright the most frequent term. There is only one topic that I couldn't identify.
+Most of the 20 topics obtained are well defined. Figure 2 shows them and the four most frequent words for each topic. Color luminance shows the relative in-topic relevance of each term, being the most bright the most common word. There is only one topic that I couldn’t identify.
 
-There are several topics about the costumer experience: Dissapointed, Love, Returning, Waiting, Good service, Nice, Take Away and good place for a Special Dinner.
+There are several topics about the customer experience: Disappointed, Love, Returning, Waiting, Good service, Nice, Take Away and having a Special Dinner.
 
 The remaining topics focus on the type of restaurant, according to their cuisine type: American, Asian, Mexican, Italian, Sushi; or other features like Buffets, Location and Ambient.
 
-There is a "No restaurant" topic because, although all the reviews are for business labeled as restaurants, some of them are not. This topic is relevant in other type of businessess like hotels. Also, the "Nightlife" topic focuses in clubs, music venues and other businessess related with night entertainment, but that are not restaurants.
+There is a “No restaurant” topic because, although all the reviews are for businesses labeled as restaurants, some of them are not (for example, hotels). Also, the “Nightlife” topic focuses on clubs, music venues and other businesses related to night entertainment, but that are not restaurants.
 
 
-
-```{r overall topic model ,echo=FALSE,fig.width=8.5,fig.height=8.5,fig.cap="Figure 2. Topic model for Yelp restaurant reviews. Color luminance shows relative in-topic relevance of each term, being the most bright the most frequent term."}
+```{r overall topic model ,echo=FALSE,fig.width=8,fig.height=8,fig.cap="Figure 2. A topic model for Yelp restaurant reviews. Color luminance shows the relative in-topic relevance of each term, being the most bright the most frequent term."}
 
 k <- 20
 n <- 4
@@ -168,13 +178,21 @@ review[review$review_id==fit@documents[order(doc.p[,16],decreasing =TRUE)][7],"t
 
 ```
 
-Since the topic model shows some topics related to cuisine types, I'll investigate how that relates to the number of restaurants that belong to a certaint type of cuisine. Figure 3 shows the relative relevance of each cuisine category in the business data. As we can see the topics found match the most frequent cuisine types.
+Since the topic model shows some topics related to cuisine types, I have investigated how that relates to the number of restaurants that belong to a certain cuisine. Figure 3 displays the relative relevance of each cuisine category in the business data. As we can see, the topics found match the most frequent cuisine types.
 
-```{r cuisine word cloud,fig.width=8.5,fig.height=8.5,echo=FALSE, fig.cap= "Figure 3. Word cloud displaying relevance of different cuisine categories."}
+
+```{r cuisine word cloud,fig.width=6,fig.height=6,echo=FALSE, fig.cap= "Figure 3. Word cloud displaying relevance of different cuisine categories."}
 
 load('../data/R/restaurant_reviews_ids_by_cuisine.RData')
 
-wordcloud(num.reviews.by.cuisine$cuisine,num.reviews.by.cuisine$n.reviews,random.order = FALSE,random.color = FALSE,colors=brewer.pal(8,"Dark2"))
+american <- sum(num.business.by.cuisine[num.business.by.cuisine$cuisine %in% c("American (New)","American (Traditional)"),]$n.busines)
+
+num.business.by.cuisine <- rbind(num.business.by.cuisine, data.frame(cuisine="American",n.business=american))
+
+
+num.business.by.cuisine <- num.business.by.cuisine[!num.business.by.cuisine$cuisine %in% c("American (New)","American (Traditional)"),]
+
+wordcloud(num.business.by.cuisine$cuisine,num.business.by.cuisine$n.business,random.order = FALSE,random.color = FALSE,colors=brewer.pal(8,"Dark2"))
 
 
 ```
@@ -182,21 +200,24 @@ wordcloud(num.reviews.by.cuisine$cuisine,num.reviews.by.cuisine$n.reviews,random
 
 ### Topics by rating
 
-The overall topic model lists several topics about costumer experience. But positive and negative experiences are mixed because the corpus includes both positive and negative reviews. Now, I'll explore the topics related to positive and negative ratings independently. Figure 4 displays the restaurant review ratings distribution. As we can see, positive reviews (stars >3) dominate over negative reviews (stars <3).
+The overall topic model lists several topics about customer experience. But good and bad experiences are mixed because the corpus includes both positive and negative reviews. I have explored the topics related to positive and negative ratings independently. Figure 4 displays the restaurant review rating distribution. We can see that positive reviews (stars >3) dominate over negative reviews (stars <3).
 
-```{r ratings distribution ,echo=FALSE, figure.cap="Figure 4. Restaurant review ratings distribution."}
+```{r ratings distribution ,echo=FALSE,fig.width=4,fig.height=4, fig.cap="Figure 4. Restaurant review ratings distribution."}
 
 
 percentages <- review %>% group_by(stars) %>% count(stars) %>% mutate(percentage=n/sum(n)*100,stars=factor(stars))
 
-ggplot(percentages,aes(x="",y=percentage,fill=stars))+geom_bar(width = 1,stat="identity")+coord_polar(theta="y")+geom_text(aes(y = percentage/2 + c(0, cumsum(percentage)[-length(percentage)]), label = paste0(round(percentage),"%")), size=7)+theme(axis.text = element_blank(),
+ggplot(percentages,aes(x="",y=percentage,fill=stars))+geom_bar(width = 1,stat="identity")+coord_polar(theta="y")+geom_text(aes(y = percentage/2 + c(0, cumsum(percentage)[-length(percentage)]), label = paste0(round(percentage),"%")), size=4)+theme(axis.text = element_blank(),
         axis.ticks = element_blank(),
         panel.grid  = element_blank(),
         panel.background = element_blank()
-        )+ylab("")+xlab("")+scale_fill_discrete(name="Stars")
+        )+ylab(NULL)+xlab(NULL)+scale_fill_discrete(name="Stars")
 
 
 ```
+
+
+
 
 ```{r,echo=FALSE}
 
@@ -207,12 +228,12 @@ load("../results/topic_models/review_topics_positive_negative.RData")
 
 ```
 
-To explore to topics on each category, I have fit two topic model (one for positive reviews and another for negative reviews) with 20 topics following the same methodology that I used for the overall topic model. I didn't include reviews with 3 stars because that rating is not positive nor negative. To avoid an unbalanced number of reviews in each category, I used a random sample for the positive category with size equal to the number of reviews in the negative category (`r nrow(restaurant.reviews.negative.topicmodel)`)
+I have fitted two topic model (one for positive reviews and another for negative reviews) with 20 topics each and following the same methodology that I used to compute the overall topic model. I didn’t include reviews with three stars because that rating is not positive nor negative. To avoid an unbalanced number of reviews in each category, I used a random sample for the positive category with size equal to the number of reviews in the negative category.
+
+In general we can see some of the overall topics also appear in these two new models we get a finer grain topic distribution about the customer experience.
 
 
-
-
-```{r,echo=FALSE,fig.width=8,fig.height=8,fig.cap="Figure 5. Topic model for positive Yelp restaurant reviews. Color luminance shows relative in-topic relevance of each term, being the most bright the most frequent term."}
+```{r,echo=FALSE,fig.width=8,fig.height=8,fig.cap="Figure 5. A topic model for positive Yelp restaurant reviews. Color luminance shows the relative in-topic relevance of each term, being the most bright the most frequent term."}
 
 k <- 20
 n <- 4
@@ -237,7 +258,7 @@ review[review$review_id==restaurant.reviews.positive.topicmodel@documents[order(
 
 ```
 
-```{r,echo=FALSE,fig.width=8,fig.height=8,fig.cap="Figure 6. Topic model for Yelp restaurant reviews. Color luminance shows relative in-topic relevance of each term, being the most bright the most frequent term."}
+```{r,echo=FALSE,fig.width=8,fig.height=8,fig.cap="Figure 6. A topic model for Yelp restaurant reviews. Color luminance shows the relative in-topic relevance of each term, being the most bright the most frequent term."}
 
 k <- 20
 n <- 4
@@ -261,3 +282,31 @@ review[review$review_id==restaurant.reviews.negative.topicmodel@documents[order(
 
 ```
 
+
+## Discussion
+
+I have explored some latent topics in a corpus of Yelp reviews for restaurants. For that, I have fitted to the corpus a topic model using LDA with Gibbs sampling.
+
+The topics found display themes related to different cuisines and customer experience. The cuisine types found correspond to the most frequent cuisine types listed in the business data.
+
+I have further explored the customer experience topics by splitting the corpus in two corpora, one for positive experiences and another for negative experiences and fitting a topic model to each corpus. Many themes that appear in the overall topic model also appear in the new topic models. The new models also show a finer grain decomposition of the customer experience.
+
+Finally, I want to point out that, although all the reviews used belong to businesses labeled in Yelp as restaurants, actually they are not. Two topics show this, and further steps should be taken to clean the corpus.
+
+## References
+
+[1] M. Anderson and J. Magruder. “Learning from the Crowd.” The Economic Journal. 5 October,2011.
+
+[2] Blei DM, Ng AY, Jordan MI (2003b). “Latent Dirichlet Allocation.” Journal of Machine Learning Research, 3, 993–1022.
+
+[3] Ingo Feinerer, Kurt Hornik, and David Meyer (2008). Text Mining Infrastructure in R. Journal of Statistical Software 25(5): 1-54
+
+[4] Kurt Hornik, Christian Buchta, Achim Zeileis (2009) Open-Source Machine Learning: R Meets Weka. Computational Statistics, 24(2), 225-232. doi:10.1007/s00180-008-0119-7
+
+[5] Griffiths TL, Steyvers M (2004). “Finding Scientific Topics.” Proceedings of the National Academy of Sciences of the United States of America, 101, 5228–5235.
+
+[6] Phan XH, Nguyen LM, Horiguchi S (2008). “Learning to Classify Short and Sparse Text & Web with Hidden Topics from Large-Scale Data Collections.” In Proceedings of the 17th International World Wide Web Conference (WWW 2008), pp. 91–100. Beijing, China.
+
+[7] Blei DM, Lafferty JD (2007). “A Correlated Topic Model of Science.” The Annals of Applied Statistics, 1(1), 17–35.
+
+[8] Hornik, K., Grün, B., 2011. topicmodels: An R package for fitting topic models. Journal of Statistical Software 40, 1–30.
