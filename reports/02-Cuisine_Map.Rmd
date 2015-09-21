@@ -1,0 +1,301 @@
+---
+title: "Cuisine Clustering and Map Construction"
+author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
+output: pdf_document
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+
+if(!require(topicmodels)){
+  install.packages("topicmodels")
+}
+require(topicmodels)
+
+if(!require(corrplot)){
+  install.packages("corrplot",dependencies=TRUE)
+}
+
+require(corrplot)
+
+if(!require(igraph)){
+  install.packages("igraph")
+}
+
+require(igraph)
+
+if(!require(dplyr)){
+  install.packages("dplyr")
+}
+
+require(dplyr)
+
+if(!require(tm)){
+  install.packages("tm")
+}
+
+require(tm)
+
+
+
+
+```
+
+
+## <a name="s1"></a>1 Introduction
+
+In a [previous report](http://rpubs.com/Belethia/108750), we explored the topics present in a set of restaurant reviews from Yelp. Some of the topics represented types of cuisines. The restaurants listed in the Yelp dataset, are often labeled according to the kind of cuisine that they serve. In this report, we use restaurant reviews to infer relationships among types of cuisines.
+
+## <a name="s2"></a>2 Methods
+
+### <a name="s2_1"></a>2.1 The Data
+
+```{r,echo=FALSE}
+
+var1 <- load('../results/language_models/restaurant.cuisines.subsample.RData')
+var2 <- load('../results/language_models/restaurant.cuisines.subsample.aggregated.RData')
+var3 <- load('../data/R/restaurant_reviews_ids_by_cuisine.RData')
+
+
+```
+
+We have described the dataset in [section 2.1 of a previous exploratory analysis](http://rpubs.com/Belethia/108750#s2_1). To investigate the relations among cuisines, we can try to find culinary aspects in the reviews (dishes, ingredients) that they have in common. An exam of positive restaurant reviews (stars >3) shows that they detail more aspects of the restaurant cuisine than negative reviews. Therefore, we will use only positive reviews in this analysis.
+
+Businesses are classified according to their categories field. Each business can have multiple labels and, in addition to the restaurant label, restaurants receive other tags to specify the type of restaurant. Some of those labels correspond to easily recognizable types of cuisines such as American, Italian and Chinese. Others tags refer to businesses that may or may not serve food (Karaokes or Swimming Pools for example) but that do not have a particular type of cuisine associated. A third kind of label, like Taxi or Automotive, lack a definite relationship with food. To have a good training set to create a cuisine map I have used only the reviews related to business that has one of the labels that clearly points to a type of cuisine.
+
+Finally, Yelp users can vote other user's reviews to highlight that they are useful and accurate. We expect that upvoted reviews will give better descriptions of the restaurants and their cuisine, and we have used only reviews upvoted at least one time.
+
+The resulting subset includes `r nrow(dtm.cuisine.subsample.review.unigram)` reviews of `r length(cuisines)` restaurant categories.
+
+### <a name="s2_2"></a>2.2 Corpus and language model
+
+We have built a corpus from the reviews and computed its document-term matrix as described in [section 2.2 of our exploratory analysis](http://rpubs.com/Belethia/108750#s2_2). However, in this analysis we have created an extra corpus by concatenating all the reviews by cuisine category, resulting in `r length(cuisines)` long documents.
+
+The vocabulary in the document-term matrix of both corpora is the same, and its length is `r ncol(dtm.cuisine.subsample.review.unigram)`.
+
+### <a name="s2_3"></a>2.3 Discovering the relationships among cuisines
+
+To discover the relations among the cuisines, we have used a document-term matrix to compute the similarities among the reviews of each cuisine type pair. Then we have used the similarities to create a graph representation of cuisines relationships and applied community detection to cluster the types of cuisines.
+
+#### <a name="s2_3_1"></a>2.3.1 Similarity
+
+We have tested three combinations of transformations of a document-term matrix and similarity functions:
+
+1. **No transformation + cosine:** cosine similarity applied to raw frequencies.
+
+2. **BM25+[1]:** BM25 can result in artificially higher scores for short documents. This modification compensates that deficiency. We used common values for BM25+ parameters.  ($b=0.5$, $\delta=1$, $k=2$).
+
+3. **LDA Topic model weights + cosine:** we fitted a topic model to the raw frequencies document-term matrix using LDA as described in [section 2.3 of the exploratory analysis](http://rpubs.com/Belethia/108750#s2_3). Then we used each document’s probability distribution over the topics as a vector representation instead of raw counts and computed cosine similarity.
+
+To compute a similarity matrix among cuisines, we applied each of the procedures to the concatenated document-term matrix and the individual document-term matrix. In the second case, to obtain a similarity matrix for cuisines I computed the mean similarity of documents in each possible cuisine pair. The result in both instances is a  `r length(cuisines)`x`r length(cuisines)` similarity matrix.
+
+#### <a name="s2_3_2"></a>2.3.2 Cuisine map and clustering
+
+Each cell in the cuisine similarity matrix represents the strength of the relationship between two cuisines. We can represent the similarity matrix as a fully connected graph in which the nodes are the cuisines, the edges the relationship between cuisines and the similarities are the edges weight. To get a representation of the most relevant relationships among cuisines we need to transform that fully connected graph into a sparser graph that only retains essential relationships (a backbone graph).
+
+We have followed [2] to compute a backbone graph for each similarity matrix. We started using a confidence level of 0.001 and increased the confidence level in 0.001 steps until we got a connected graph that included all the cuisines, or the confidence level reached a value of 0.05. To achieve this step we used the implementation in the R package `disparityfilter`.
+
+To cluster the cuisines in the map, we have tested all the community detection algorithms listed in the R igraph package. The one that performed better and we applied on the cuisine maps is the one based on label propagation [3].
+
+## <a name="s3"></a>3 Results
+
+“LDA Topic model weights + cosine” applied to the concatenated reviews resulted in a better final network than the other methods. On the other hand, when we applied “No transformation + cosine”, we could not get any backbone network with significance level less or equal to 0.05. For brevity, we will compare only the results of “LDA Topic model weights + cosine” and “BM25+”.
+
+## <a name="s3_1"></a>3.1 Similarities
+
+Figure 1 shows the similarity matrix resulting from applying BM25+ to the collection of concatenated reviews. As we can see, there is a set of cuisines related among them, but many cuisines do not appear to have any similarity to any other.
+
+```{r,echo=FALSE,fig.width=10,fig.height=10,fig.cap="Figure 1. Similarity matrix computed using BM25."}
+
+var2 <- load("../results/cuisine_maps/cuisines_agregated_bm25.RData")
+
+
+corrplot(as.matrix(sim.bm25.aggregated),method="color",tl.cex=0.4,order="hclust",is.cor=FALSE,type="low")
+
+
+```
+
+**Figure 1. Similarity matrix computed using BM25. Rows and columns have been reordered according to the output of a complete linkage hierarchical clustering algorithm.**
+
+On the other hand, the similarity matrix computed using a topic model and cosine similarity shows a more complex structure. The rows and columns have been reordered according to the output of a complete linkage hierarchical clustering algorithm, and the darker triangles close to the matrix diagonal reveal several potential groups of cuisines. Off-diagonal, darker cells indicate cuisines that act as connections between clusters.
+
+We want to point out that, although we fitted a 20 topics model, for the similarity matrix I only used 19 of them. The topic discarded doesn't describe any cuisine aspect but the overall positive customer experience common to all the reviews in this subset (see [section 3.3 of the exploratory analysis](http://rpubs.com/Belethia/108750#s3_3) for more details). 
+
+```{r,echo=FALSE,fig.width=10,fig.height=10,fig.cap="Figure 2. Similarity matrix computed using LDA and cosine similarity."}
+
+var3 <- load("../results/cuisine_maps/cuisines_agregated_topic_similarity.RData")
+
+corrplot(as.matrix(sim.gamma.aggregated),method="color",tl.cex=0.4,order="hclust",is.cor=FALSE,type="low")
+
+```
+
+**Figure 2. Similarity matrix computed applying cosine similarity to the document weights of a topic model. Rows and columns have been reordered according to the output of a complete linkage hierarchical clustering algorithm**
+
+## <a name="s3_1"></a>3.1 Cuisine maps
+
+Figure 3 and figure 4 show the backbone networks computed using the BM25+ and the topic model similarities respectively. Colors indicate clusters obtained using a community detection algorithm.
+
+The edges in the in the BM25+ cuisine map have a significance level less or equal to 0.05. Many cuisines are missing on this map; this reflects that many nodes did not have a similarity strong enough with any other node. The BM25+ map only has one cluster, as corresponds to the matrix representation, and doesn’t shows any interesting structure.
+
+The map derived from the topic model similarities is much more exciting. The backbone graph includes all the cuisines, and the significance level of the edges is less or equal to 0.011. We can observe several clusters that describe meaningful relations among cuisines. For example, Asian cuisines group in a well-defined cluster, the same happens with Arabic, South American, and many European cuisines. However, geographic location is not the only criterion that define the clusters found, types of dishes like desserts also appear clustered. In addition to tight clusters, we can find some cuisines like Australian, Argentine or Fondue that work as a bridge between clusters. These bridges do not always have a culinary meaning, and some of the bridge cuisines are those with fewer reviews.
+
+```{r,echo=FALSE,fig.width=9,fig.height=9,fig.cap="Figure 3. Cuisine map obtained by extracting a backbone graph from a BM25+ similarity matrix. Colors indicate different clusters defined using a label propagation community detection algorithm."}
+
+var4 <- load("../results/cuisine_maps/aggregated_cuisine_bm25_network.RData")
+
+seed <- 300
+
+set.seed(seed)
+plot(g_backbone,layout=layout_with_lgl(g_backbone),vertex.size=3,vertex.label.cex=0.7,vertex.label.dist=0.2,edge.color="lightgrey")
+
+
+```
+
+**Figure 3. Cuisine map obtained by extracting a backbone graph from the similarity matrix displayed in Figure 1. Colors indicate different clusters defined using a label propagation community detection algorithm.**
+
+
+```{r,echo=FALSE,,fig.width=9,fig.height=9,fig.cap="Figure 4. Cuisine map obtained by extracting a backbone graph from a similarity matrix computed applying cosine similarity to the document weights of a topic model. Colors indicate different clusters defined using a label propagation community detection algorithm"}
+
+var4 <- load("../results/cuisine_maps/aggregated_cuisine_topic_network.RData")
+
+seed <- 200
+
+
+set.seed(seed)
+
+# Compute the network layout.
+
+layout <- layout_with_lgl(g_backbone,maxiter = 700)
+
+# Make some modifications to the layout and to the labels positions to make the graph more readable.
+
+# Korean vertex location
+layout[122,2] <- 18.5
+layout[122,1] <- -136.5
+
+# Burgers vertex location
+
+layout[13,1] <- -134
+layout[13,2] <- 23
+
+
+layout[which(V(g_backbone)$name %in% c("Gastropubs","Swimming Pools","American (New)","Local Flavor")),1] <- layout[which(V(g_backbone)$name %in% c("Gastropubs","Swimming Pools","American (New)","Local Flavor")),1]-10
+
+layout[which(V(g_backbone)$name %in% c("Fondue")),1] <- layout[which(V(g_backbone)$name %in% c("Fondue")),1]-30
+
+layout[which(V(g_backbone)$name %in% c("Local Flavor")),2] <- layout[which(V(g_backbone)$name %in% c("Local Flavor")),2]+2
+
+layout[which(V(g_backbone)$name %in% c("Soul Food")),1] <- layout[which(V(g_backbone)$name %in% c("Soul Food")),1]-1.5
+
+
+label.degree <- rep(-pi/4,vcount(g_backbone))
+
+label.degree[which(V(g_backbone)$name=="Thai")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Ramen")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Himalayan/Nepalese")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Taiwanese")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Chinese")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Vietnamese")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Singaporean")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Cambodian")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Shanghainese")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Indonesian")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Cantonese")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Soul Food")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Ethnic Food")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Specialty Food")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Mexican")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Tex-Mex")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Salvadoran")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Peruvian")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Soul Food")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Hawaiian")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Chicken Wings")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Canadian (New)")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Middle Eastern")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Modern European")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Steakhouses")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Barbeque")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Gastropubs")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Tapas Bars")] <- pi
+label.degree[which(V(g_backbone)$name=="Russian")] <- pi
+label.degree[which(V(g_backbone)$name=="Breakfast & Brunch")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="American (Traditional)")] <- pi
+label.degree[which(V(g_backbone)$name=="Swimming Pools")] <- pi
+label.degree[which(V(g_backbone)$name=="Chocolatiers & Shops")] <- pi
+label.degree[which(V(g_backbone)$name=="Ice Cream & Frozen Yogurt")] <- pi
+label.degree[which(V(g_backbone)$name=="Patisserie/Cake Shop")] <- pi
+label.degree[which(V(g_backbone)$name=="Pretzels")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Comfort Food")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Diners")] <- 0
+label.degree[which(V(g_backbone)$name=="Portuguese")] <- 0
+label.degree[which(V(g_backbone)$name=="Tapas/Small Plates")] <- 0
+label.degree[which(V(g_backbone)$name=="Local Flavor")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Basque")] <- pi/2
+label.degree[which(V(g_backbone)$name=="Fondue")] <- pi/2
+label.degree[which(V(g_backbone)$name=="Spanish")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Juice Bars & Smoothies")] <- 0
+label.degree[which(V(g_backbone)$name=="Vegetarian")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Live/Raw Food")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Latin American")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Halal")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Falafel")] <- pi/4
+label.degree[which(V(g_backbone)$name=="Afghan")] <- 3*pi/4
+label.degree[which(V(g_backbone)$name=="Egyptian")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Persian/Iranian")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Lebanese")] <- -3*pi/4
+label.degree[which(V(g_backbone)$name=="Mediterranean")] <- 0
+label.degree[which(V(g_backbone)$name=="Hookah Bars")] <- 0
+
+label.dist <- rep(0.2,vcount(g_backbone))
+label.dist[which(V(g_backbone)$name=="American (Traditional)")] <- 0.55
+label.dist[which(V(g_backbone)$name=="Swimming Pools")] <- 0.55
+label.dist[which(V(g_backbone)$name=="Chocolatiers & Shops")] <- 0.55
+label.dist[which(V(g_backbone)$name=="Ice Cream & Frozen Yogurt")] <- 0.65
+label.dist[which(V(g_backbone)$name=="Patisserie/Cake Shop")] <- 0.55
+label.dist[which(V(g_backbone)$name=="Tapas/Small Plates")] <- 0.55
+label.dist[which(V(g_backbone)$name=="Juice Bars & Smoothies")] <- 0.55
+label.dist[which(V(g_backbone)$name=="Tapas Bars")] <- 0.4
+label.dist[which(V(g_backbone)$name=="Russian")] <- 0.4
+label.dist[which(V(g_backbone)$name=="Diners")] <- 0.3
+label.dist[which(V(g_backbone)$name=="Filipino")] <- 0.3
+label.dist[which(V(g_backbone)$name=="Portuguese")] <- 0.4
+label.dist[which(V(g_backbone)$name=="Mediterranean")] <- 0.45
+label.dist[which(V(g_backbone)$name=="Hookah Bars")] <- 0.45
+
+E(g_backbone)$color <- unlist(lapply(1:ecount(g_backbone),function(i){
+  
+  vs <- ends(g_backbone,i)
+  if(V(g_backbone)$color[V(g_backbone)$name==vs[1]]==V(g_backbone)$color[V(g_backbone)$name==vs[2]]){
+    paste0(substr(V(g_backbone)$color[V(g_backbone)$name==vs[1]],1,7),"60")
+  }else{
+    "lightgray"
+  }
+  
+}))
+
+
+
+plot(g_backbone,layout=layout,vertex.size=3,vertex.label.cex=0.7,vertex.label.dist=label.dist,vertex.label.degree=label.degree)
+
+
+
+
+```
+
+**Figure 4. Cuisine map obtained by extracting a backbone graph from the similarity matrix displayed in Figure 2. Colors indicate clusters defined using a label propagation community detection algorithm.**
+
+## 4 Discussion
+
+We have examined the relationships between cuisine categories using Yelp’s restaurant reviews. For that, we have computed the similarities of the reviews using several methods that explore different representations of the reviews and different ways to calculate the similarity between documents. From all the techniques applied, concatenating the texts by cuisine, running a topic model using LDA and using the probability distribution of the documents over the topics as a vector representation is the most successful. By fitting a topic model, we build a set of features (topics) that represent similarities between documents and reduces the noise that would remain in the raw or weighted word counts otherwise.
+
+When comparing concatenating then computing similarities versus computing similarities then aggregating we have found that the first approach is superior. A possible explanation is that by first concatenating and then computing similarity we reduce some of the inter-document variability.
+
+Switching from a matrix representation of a graph representation allows a better visualization of the similarities after extracting a backbone network from the full similarity network. The backbone graph computed from the topic model similarity matrix shows clusters of cuisines related by their geographic proximity (Asian) or by the type of dishes (desserts). Some cuisines act as bridges between tight clusters, although some bridges may be the result of a spurious relationship due to a small number of reviews.
+
+## 5 References
+
+1.  [Lv, Y., Zhai, C., 2011. Lower-bounding term frequency normalization, in:. Presented at the Proceedings of the 20th ACM international conference on Information and knowledge management, ACM, pp. 7–16.](http://dx.doi.org/10.1145/2063576.2063584)
+
+2. [Serrano, M.A., Boguna, M., Vespignani, A., 2009. Extracting the multiscale backbone of complex weighted networks. arXiv. doi:10.1073/pnas.0808904106](http://dx.doi.org/10.1073/pnas.0808904106)
+
+3. [Raghavan, U.N., Albert, R., Kumara, S., 2007. Near linear time algorithm to detect community structures in large-scale networks. Phys. Rev. E 76, 036106.](http://dx.doi.org/10.1103/PhysRevE.76.036106)

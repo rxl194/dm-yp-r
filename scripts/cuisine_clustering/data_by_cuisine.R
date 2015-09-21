@@ -1,3 +1,5 @@
+# Splits the reviews in restaurant by restaurant category. It removes those categories that are not clearly related to restaurants like Taxi and Automotive.
+
 require(stringr)
 
 require(dplyr)
