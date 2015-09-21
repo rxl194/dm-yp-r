@@ -1,3 +1,5 @@
+# Splits the corpus of restaurant reviews into two corpora. One for positive reviews (stars >3) and another for negative reviews (stars < 3).
+
 vars1 <- load('data/R/restaurant_ids.RData')
 
 

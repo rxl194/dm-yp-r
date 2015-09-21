@@ -1,10 +1,19 @@
+# Computes a topic model for the corpus of restaurant reviews.
+
 if(!require(topicmodels)){
-  install.packages("topicmodels")
+  install.packages("topicmodels",dependencies = TRUE)
 }
 require(topicmodels)
 
+if(!require(dplyr)){
+  install.packages("dplyr",dependencies = TRUE)
+}
 
 require(dplyr)
+
+if(!require(caret)){
+  install.packages("caret",dependencies = TRUE)
+}
 
 require(caret)
 

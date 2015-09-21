@@ -1,11 +1,19 @@
+#Computes a topic model for the positive and for the negative restaurant reviews corpora.
+
 if(!require(topicmodels)){
   install.packages("topicmodels")
 }
 require(topicmodels)
 
-
+if(!require(dplyr)){
+  install.packages("dplyr")
+}
 require(dplyr)
 
+
+if(!require(caret)){
+  install.packages("caret")
+}
 require(caret)
 
 vars1 <- load('results/language_models/restaurant.reviews.unigram.positive.negative.RData')

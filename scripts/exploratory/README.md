@@ -7,3 +7,4 @@ This folder holds the scripts relevant during the exploratory phase.
 - **topicmodel.R** Computes a topic model for the corpus of restaurant reviews.
 - **data_by_rating.R** Splits the corpus of restaurant reviews into two corpora. One for positive reviews (stars >3) and another for negative reviews (stars < 3).
 - **topicmodel_positive_negative.R** Computes a topic model for the positive and for the negative restaurant reviews corpora.
+- **subset_useful_restaurant_reviews.R** Selects restaurant reviews that are useful. One review is useful if has been upvoted as usefull at least once.

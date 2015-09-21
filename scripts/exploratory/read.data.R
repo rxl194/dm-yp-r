@@ -1,3 +1,5 @@
+# Reads Yelp data in JSON format and saves the resulting data.frames in RData files.
+
 if(!require(jsonlite)){
   install.packages("jsonlite")
 }

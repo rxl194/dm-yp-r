@@ -1,3 +1,5 @@
+# Filters business by category to keep only those labeled as Restaurants and then filters the reviews to keep reviews for restaurants. Stored the ids of the filtered businesses and reviews.
+
 load('data/R/business.RData')
 load('data/R/review.RData')
 
