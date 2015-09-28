@@ -5,6 +5,7 @@ This folder contains R scripts used to analyze the data.
 - **exploratory**. This folder holds the scripts relevant during the exploratory phase.
 
 - **cuisine_clustering**. This folder contains scripts used to compute the results used in the Cuisine Clustering and Map Construction step.
+- **dish_recognition**. This folder contains scripts for dish discovery using Yelp reviews and the algorithms: word2vect, TopMine, SegPhrase.
 
 ## Helper scripts
 

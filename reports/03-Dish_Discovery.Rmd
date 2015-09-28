@@ -1,0 +1,140 @@
+---
+title: "Dish Discovery"
+author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
+output: html_document
+---
+
+## <a name="s1"></a>1 Introduction
+
+In this task, our objective is to extract dish names from a corpus of Yelp reviews. In particular, we try to compile a list of dishes for six cuisines: New American, Chinese, Indian, Italian, Mediterranean, and Mexican.
+
+## <a name="s2"></a>2 Methods
+
+### <a name="s2_1"></a>2.1 The Data
+
+We have described the Yelp dataset in [section 2.1 of a previous exploratory analysis](http://rpubs.com/Belethia/108750#s2_1). To try to discover dishes in each of the cuisines proposed, we have created a corpus of Yelp reviews for each cuisine according to the restaurant category labels of the corresponding business.
+
+
+
+### <a name="s2_2"></a>2.2 Dish extraction
+
+We have applied three different algorithms for dish extraction: SegPhrase [1], TopMine [2] and word2vect [3].
+
+### <a name="s2_2_1"></a>2.2.1 Labeled sample
+
+As we will see later, SegPhrase requires a labeled sample to extract related items. Here we will use a list of items obtained using SegPhrase autolabel feature and reviewed manually to remove false positives and negatives. After that, we expanded the list by including dishes listed on Wikipedia.
+
+#### <a name="s2_2_2"></a>2.2.2 TopMine
+
+[TopMine](http://web.engr.illinois.edu/~elkishk2/) first segments each review into single and multi-word phrases and then applies an LDA topic model on the partitioned document. The algorithm estimates the topic model hyperparameters using Gibbs sampling. The output of the algorithm includes the distribution by topic of single and multi-word phrases.
+
+We run the algorithm for each cuisine using the following configuration.
+
+- minimum phrase frequency: 5
+- maximum size of phrase (number of words): 6
+- number of topics: 10
+- Giggs sampling iterations: 500
+- significance threshold for merging unigrams into phrases: 4
+- burnin before hyperparameter optimization: 100
+- alpha hyperparameter: 2
+- optimize hyperparameters every n iterations: 50
+
+We selected the number of sampling iterations inspecting the evolution of perplexity during the optimization and selecting the point in which the perplexity reduction after 50 steps was not significative compared to previous iterations.
+
+After running the algorithm, we inspected the resulting topics, and we selected those topics clearly related to dishes and food. Of all the terms chosen for one cuisine, we only kept those with a frequency above a threshold determined by the quality of the items above and bellow the threshold.
+
+#### <a name="s2_2_3"></a>2.2.3 SegPhrase
+
+This algorithm extracts popular phrases by first segmenting the corpus and selecting those phrases above some minimum threshold support and then rectifying the phrase counts according to phrase quality criterias. The algorithm allows as input a set of labeled good and bad quality phrases that allows to rectify the counts to extract phrases closely related to the positively labeled samples. We have used the labeled sample described in [section 2.2.1](#s2_2_1).
+
+We cloned the [SegPhrase repository on GitHub](https://github.com/shangjingbo1226/SegPhrase) and applied the tool using default parameters except for:
+
+- support threshold: 10.
+- enabled use of unigrams.
+- enabled use of word networks.
+
+After that, we filtered the phrases listed in the file salient.csv to keep only those phrases with a rectified count above 0.8.
+
+#### <a name="s2_2_4"></a>2.2.4 Word2Vect
+
+The [word2vect](https://code.google.com/p/word2vec/) trains a neural network to compute a vector representation of words focused on the word similarity task.
+
+First we obtained a word representation that included phrases with two and three words by running twice the word2phrase tool provided along with word2net.
+
+    word2phrase -train corpus.txt -output corpus_w_bigrams.txt
+    word2phrase -train corpus_w_bigrams.txt -output corpus_w_trigrams.txt
+
+Then, we computed the vector representations using the word2vect program
+
+    word2vec -train corpus_w_trigrams.txt -output model.txt -binary 0
+    
+the option binary 0 writes the program output in a CSV file.
+
+Once we had the vector representation, we loaded the output into R, removed the vectors for stopwords (in English and any other relevant language) and computed the cosine similarity among all the words.
+
+Finally, to get a list of dishes for each cuisine, we used some dishes names as a starting point and searched for similar words using the similarity matrix. We used a similarity threshold between 0.7 and 0.8, depending on the cuisine. As a starting point, we used the positively labeled dishes in the labeled sample described in [section 2.2.1](#s2_2_1).
+
+
+## 3 Results
+
+All the methods applied retrieved valid dish names and, although the highest scored results were dishes, the quality of the results deteriorated rapidly as the score of the items was lower. Therefore, to keep only good quality results, we inspected the output and fixed the thresholds described above. We discarded all items with scored bellow the corresponding threshold.
+
+Proceeding this way, we got one list of items for each algorithm and each cuisine. Word2Vect resulted in a list containing more items than the other two algorithms.
+
+For brebity we only show some results for Italian cuisine. Figure 1 and Figure 2 display the items retrieved by TopMine and SegPhrase respectively. As we can see, TopMine is doing a better work in retrieving dishes than SegPhrase. Word2Vect doesn't provide a relevance score, so we cannot 
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE,fig.width=5,fig.height=5}
+
+require(wordcloud)
+
+require(dplyr)
+
+require(tm)
+
+italian_topmine <- read.table("../results/dish_discovery/italian/italian_topmine.txt",stringsAsFactors = FALSE,sep="\t") %>% mutate(dishes=tolower(stripWhitespace(V1)))  %>% arrange(desc(V2)) %>% filter(V2 >=18)
+
+pal <- brewer.pal(8,"Dark2")
+
+wordcloud(italian_topmine$dishes,italian_topmine$V2,scale=c(4,.2),random.order = FALSE,colors = pal)
+
+```
+
+**Figure 1. Wordcloud displaying the list of dishes obtained applying TopMine to the Italian corpus. The size of the words is related to the item frequency given by the algorithm.**
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE,fig.width=5,fig.height=5}
+
+
+italian_segphrase <- read.table("../results/dish_discovery/italian/italian_segphrase.csv",sep=",",stringsAsFactors = FALSE) %>% mutate(dishes=gsub("_"," ",V1)) %>% filter(V2 >=0.8)
+
+pal <- brewer.pal(8,"Dark2")
+
+wordcloud(italian_segphrase$dishes,(italian_segphrase$V2-0.8)*1000,scale=c(3,.5),random.order = FALSE,colors = pal)
+
+```
+
+**Figure 2. Wordcloud displaying the list of dishes obtained applying SegPhrase to the Italian corpus. The size of the words is related to the rectified counts given by the algorithm.**
+
+
+
+However, even after keeping only the top scoring items for each algorithm we found items not related to food, related to food but that were not dishes (for example, ingredients) and dishes from other cuisines (for example burger in Italian cuisine).
+
+To further refine our results, for each cuisine we pooled together all the items obtained using the three algorithms, removing duplicates. Then we followed two approaches:
+
+1. Determine which items appear in more than three cuisines and remove them from all the cuisines. If one item is listed in more than three cuisines, there is a good chance that it is not specific of any cuisine. We removed such common items from all the cuisines lists.
+
+2. Some cuisines share items with other cuisines because they receive a strong influence from others (for example the New American cuisine). In this case, we removed from the influenced cuisine the items that it has in common with the influencing cuisine.
+
+
+## 4 Discussion
+
+First, is important to note that all the quality statements done in the results section are the result of a visual inspection of the results. To perform a more rigorous comparison of the algorithm results we should use some gold standard listing all the dishes truly listed in the reviews.
+
+With the above observation in mind, it seems that using word2vect results in overall better dishes lists. This may be because the algorithm is specifically designed to perform well on the word similarity task.
+
+## 5 References
+
+[1] Liu, J., Shang, J., Wang, C., Ren, X., Han, J., 2015. Mining Quality Phrases from Massive Text Corpora, in:. Presented at the Proceedings of the 2015 ACM SIGMOD International Conference on Management of Data, ACM, pp. 1729–1744.
+
+[2] El-Kishky, A., Song, Y., Wang, C., Voss, C.R., Han, J., 2014. Scalable topical phrase mining from text corpora. Proceedings of the VLDB Endowment 8, 305–316.
+
+[3] Goldberg, Y., Levy, O., 2014. word2vec Explained: deriving Mikolov et al.'s negative-sampling word-embedding method. arXiv preprint arXiv:1402.3722.
