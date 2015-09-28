@@ -1,7 +1,7 @@
 ---
 title: "Dish Discovery"
 author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
-output: html_document
+output: pdf_document
 ---
 
 ## <a name="s1"></a>1 Introduction
@@ -81,7 +81,7 @@ All the methods applied retrieved valid dish names and, although the highest sco
 
 Proceeding this way, we got one list of items for each algorithm and each cuisine. Word2Vect resulted in a list containing more items than the other two algorithms.
 
-For brebity we only show some results for Italian cuisine. Figure 1 and Figure 2 display the items retrieved by TopMine and SegPhrase respectively. As we can see, TopMine is doing a better work in retrieving dishes than SegPhrase. Word2Vect doesn't provide a relevance score, so we cannot 
+For brebity we only show some results for Italian cuisine. Figure 1 and Figure 2 display the items retrieved by TopMine and SegPhrase respectively. As we can see, TopMine is doing a better work in retrieving dishes than SegPhrase. Word2Vect doesn't provide a relevance score, so we cannot show its results in a similar way.
 
 ```{r,echo=FALSE,message=FALSE,warning=FALSE,fig.width=5,fig.height=5}
 
@@ -116,7 +116,7 @@ wordcloud(italian_segphrase$dishes,(italian_segphrase$V2-0.8)*1000,scale=c(3,.5)
 
 
 
-However, even after keeping only the top scoring items for each algorithm we found items not related to food, related to food but that were not dishes (for example, ingredients) and dishes from other cuisines (for example burger in Italian cuisine).
+However, even after keeping only the top scoring items for each algorithm we found items not related to food, related to food but that were not dishes (for example, ingredients) and dishes from other cuisines (we can see several examples in Figure 2).
 
 To further refine our results, for each cuisine we pooled together all the items obtained using the three algorithms, removing duplicates. Then we followed two approaches:
 

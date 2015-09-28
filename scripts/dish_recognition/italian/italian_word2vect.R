@@ -45,11 +45,15 @@ output_file_trigram <- 'results/dish_discovery/italian/italian_w2v_trigram.txt'
 source('scripts/gpuFunctions.R')
 source('scripts/dish_recognition/word2vec.R')
 
+# Read the corpus
+
 f <- file('results/dish_discovery/italian/italian_positive_useful_corpus.txt')
 
 italian <-data.frame(text=readLines(f),stringsAsFactors = FALSE)
 
 close(f)
+
+# Preprocess. Transform encoding, strip extra white spaces, convert to lowercase, remove numbers and punctuation
 
 italian <- italian %>% 
   mutate(text=iconv(text,to="ASCII",sub="")) %>%
@@ -58,16 +62,21 @@ italian <- italian %>%
   mutate(text=removeNumbers(text)) %>%
   mutate(text=removePunctuation(text))
 
-
+# Save the corpus
 f <- file(train_file)
 writeLines(italian$text,f)
 close(f)
 
+# Run word2vect
 
+
+# Partition using bi and trigrams
 
 system(paste0("tools/word2vec/word2phrase -train ",train_file," -output ",output_file_bigram," -min-count 6"))
 
 system(paste0("tools/word2vec/word2phrase -train ",output_file_bigram," -output ",output_file_trigram," -min-count 6"))
+
+# Run word2vect
 
 system(paste0("tools/word2vec/word2vec -train ",output_file_trigram," -output ",output_file_bin," -binary 1 -min-count 6 -size 100"))
 
@@ -98,15 +107,12 @@ vectors.no.stop <- vectors.no.stop[!words.no.stop %in% stopwords(kind="it"),]
 
 words.no.stop <- words.no.stop[!words.no.stop %in% stopwords(kind="it")]
 
-
+# Compute cosine similarity
 
 cosine.similarity <- gpuCosine(vectors.no.stop)
 
 rownames(cosine.similarity) <- words.no.stop
 colnames(cosine.similarity) <- words.no.stop
-
-
-
 
 
 
@@ -124,37 +130,13 @@ max.depth <-3
 # }))
 #   
 # plot(thresholds,n.dishes)
+
+# Get related items to the elements in the training list
+
   dishes <- extract.related.words(cosine.similarity,labels,threshold = 0.78,max.depth = max.depth)
 
-simil <- (cosine.similarity[dishes,dishes]+1)/2
 
-edges <- t(combn(rownames(simil),2))
-
-names(edges) <- c("from","to")
-
-weights <- simil[t(combn(rownames(simil),2))]
-
-
-simil <- data.frame(edges,weight=weights,stringsAsFactors = FALSE)
-
-names(simil) <- c("from","to","weight")
-g <- graph.data.frame(simil,directed=FALSE)
-
-N <- vcount(g)
-
-# Extract backbone graph
-
-alpha <- 0.315
-g_backbone <- try(get.backbone(g,alpha=alpha,directed=FALSE))
-
-vcount(g_backbone)
-is.connected(g_backbone)
-
-seed <- 300
-
-set.seed(seed)
-plot(g_backbone,layout=layout_with_lgl(g_backbone),vertex.size=3,vertex.label.cex=0.7,vertex.label.dist=0.2,edge.color="lightgrey")
-
+# Save the dishes
 
 f <- file("results/dish_discovery/italian/italian_dishes.txt","w")
 
