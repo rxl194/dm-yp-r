@@ -1,3 +1,19 @@
+if(!require(R.utils)){
+  install.packages("R.utils",dependencies = TRUE)
+}
+
+
+require(R.utils)
+
+if(!require(stringr)){
+  install.packages("stringr",dependencies = TRUE)
+}
+
+
+require(stringr)
+
+source('scripts/igraph.plot2.R')
+
 graph.circular <- function(fit,k,n,topic.names=c()){
 
 topic.terms <- data.frame(terms(fit,n),stringsAsFactors = FALSE)
