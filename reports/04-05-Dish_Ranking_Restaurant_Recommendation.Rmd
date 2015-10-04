@@ -1,0 +1,329 @@
+---
+title: "Popular dishes & Restaurant recomendations"
+author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
+output: html_document
+---
+
+```{r,echo=FALSE,warning=FALSE, message=FALSE}
+
+if(!require(topicmodels)){
+  install.packages("topicmodels",dependencies = TRUE)
+}
+require(topicmodels)
+
+if(!require(dplyr)){
+  install.packages("dplyr",dependencies = TRUE)
+}
+
+require(dplyr)
+
+if(!require(ggplot2)){
+  install.packages("ggplot2",dependencies = TRUE)
+}
+
+
+require(ggplot2)
+
+if(!require(slam)){
+  install.packages("slam",dependencies = TRUE)
+}
+
+
+require(slam)
+
+require(stringr)
+
+require(recommenderlab)
+
+require(Matrix)
+
+```
+
+## <a name="s1"></a>1 Introduction
+
+In this task, we mine Yelp reviews to elaborate a ranking of the most popular dishes according to the customers opinions. Also, we use the reviews to recommend the best restaurants that serve a given dish.
+
+## <a name="s2"></a>2 Methods
+
+For reproducibility, all the R code used in this task can be found in this [GitHub repository](https://github.com/Belethia/Topic-Mining).
+
+### <a name="s2_1"></a>2.1 The Data
+
+We have described the Yelp dataset in [section 2.1 of a previous exploratory analysis](http://rpubs.com/Belethia/108750#s2_1). In this report, in addition to the reviews objects, we have used business objects to retrieve the name of the restaurants. We used all the restaurant reviews available in the Yelp dataset.
+
+To build the dish rankings, we used the list of dishes that we mined in our [previous dish discovery work](http://rpubs.com/Belethia/114029). We have included only the dishes retrieved using word2vect and TopMine.
+
+### <a name="s2_2"></a>2.2 Dish Ranking
+
+To create a dish ranking, we need some measure or score to compare the dishes according to their popularity. Once we have such score, we simply list the dishes in decreasing order of the score, and we present to the user the top-N dishes. We have computed four different scores: document frequency, average review stars, and versions of the two scores weighted by the probability that the reviews belong to a food topic.
+
+#### <a name="s2_2_1"></a>2.2.1 Document frequency
+
+For each dish, we counted the number of reviews that contain the dish name. We used the document frequency as opposed to the term frequency because some reviews mention a dish repeatedly, and this would result in an artificial inflation of popularity.
+
+Some dishes are not exclusively served by restaurants of one category, especially if the two cuisines are closely related, like Mediterranean and Italian. So, we did not restrict ourselves to count the number of occurrences in the reviews related to the corresponding cuisines category.
+
+#### <a name="s2_2_2"></a>2.2.2 Average review stars
+
+For each dish, we have computed the average stars of the reviews that mention it. As in document frequency, we have used all the reviews as opposed to restricting to the corresponding cuisine category.
+
+#### <a name="s2_2_3"></a>2.2.3 Food topic probability
+
+We have computed a topic model using LDA as explained in [section 2.3 of our previous exploratory analysis](http://rpubs.com/Belethia/108750#s2_3). In this report, we have used all the reviews and just three topics. Then we inspected the three topics and selected the topic related to food. The other two topics were about service and ambience.
+
+Our score is a modified version of the term frequency score. Instead of summing 1 for each document that mentions a dish, we sum the probability of the review being assigned to the food topic. So, our score is a weighted document frequency that highlights reviews focused on the culinary experience.
+
+#### <a name="s2_2_4"></a>2.2.4 Average review stars weighted by food topic probability.
+
+Our last approach combines each review rating and the probability of being assigned to the food topic. For one dish, the average score includes the opinion of the customers about their experience and how related to food are the review in which the dish appears.
+
+This score reduces the impact of high scores earned by other aspects of the experience rather than by the food. For example, a customer might be very happy with the service and the dish be mentioned only briefly and not be the reason for the rating.
+
+### <a name="s2_3"></a>2.3 Restaurant recommendation
+
+To recommend a restaurant for a given dish, we need a score that tells us how good each restaurant is at cooking that dish. We will use the same scores computed to rank dishes in [section 2.2](#s2_2), but we will aggregate them by restaurant to get a dishes-restaurants rating matrix.
+
+The recommendation requested is in the form of a ranking listing the best N restaurants for a dish. We have followed two different approaches to computing our recommendations.
+
+Given a dish, the first approach is simply to order the restaurants by decreasing order of their score for the dish. Then we present the top N restaurants.
+
+A second approach contemplates the possibility of a dish being on a restaurant menu, but not being commented by some customer. We extend the list of restaurants recommended applying an user-based collaborative filter to predict for a restaurant the rating of a dish not commented in the restaurant reviews. In our collaborative filter, the dishes play the role of users and the restaurants play the role of items. By applying a collaborative filter, we are assuming that restaurants that are good at cooking some dishes offer a similar quality in dishes that are related. In our work, the implementation of the collaborative filter is the one in the recommenderlab R package [1].
+
+##<a name="s3"></a>3 Results
+
+###<a name="s3_1"></a>3.1 Dish rankings
+
+Although we have computed the ranking for all the dishes in our lists of dishes, for readability we only will show the top-20 dishes in each ranking.
+
+Figures 1 to 4 show dish rankings for six cuisines computed using each of the scores described in [section 2.2](#s2_2). The first thing that we can notice is that some of the dishes are not dishes. For example, in Figure 1 the most popular dish in American cuisine is “casino”. The reason is that We obtained the list of dishes using an automatic mining procedure that introduced some false positive dishes in our lists. This problem seems to be reduced partially by using the average review rating to rank the dishes (Figure 2).
+
+Using weighted document frequency (Figure 3) moves down some positions those words not related to food. For example, building in the American ranking in Figure 1. The best result regarding keeping only dishes in the ranking is obtained using the weighted stars average (Figure 4).
+
+When we compare Figures 2 and 4 we can see that the dishes do not follow the same order. For example, in the Chinese cuisine we can see that “aji panca” moves from lower positions in Figure 2 to the first position in Figure 4. On the other hand, dishes like “taro snoh” disappear from the top-20 ranking.  A closer exam of the reviews that mention both dishes shows the reason. Almost all the 15 reviews that mention “aji panca” are a detailed description of what customers ordered and their opinion about the dishes. On the other hand, most of the five reviews that mention “taro nosh” talk about something else like the ambience or the service. When we weighted the ratings using a topic model we reinforced opinions focused on culinary aspects.
+
+
+
+```{r,echo=FALSE}
+load('../results/dish_ranking/dish_rankings.RData')
+
+load('../results/dish_discovery/italian/italian_dishes_clean.txt')
+
+load('../results/dish_discovery/chinese/chinese_dishes_clean.txt')
+
+load('../results/dish_discovery/indian/indian_dishes_clean.txt')
+
+load('../results/dish_discovery/mexican/mexican_dishes_clean.txt')
+
+load('../results/dish_discovery/american/american_dishes_clean.txt')
+
+load('../results/dish_discovery/mediterranean/mediterranean_dishes_clean.txt')
+
+italian.dish.rankings <- italian.dish.rankings %>% filter(dishes %in% italian_clean)
+
+italian.dish.rankings <- italian.dish.rankings[unlist(lapply(italian.dish.rankings$dishes,function(dish){
+  sum(grepl(dish,italian.dish.rankings$dishes))==1
+})),] 
+
+chinese.dish.rankings <- chinese.dish.rankings %>% filter(dishes %in% chinese_clean)
+
+chinese.dish.rankings <- chinese.dish.rankings[unlist(lapply(chinese.dish.rankings$dishes,function(dish){
+  sum(grepl(dish,chinese.dish.rankings$dishes))==1
+})),]
+
+
+indian.dish.rankings <- indian.dish.rankings %>% filter(dishes %in% indian_clean)
+
+indian.dish.rankings <- indian.dish.rankings[unlist(lapply(indian.dish.rankings$dishes,function(dish){
+  sum(grepl(dish,indian.dish.rankings$dishes))==1
+})),]
+
+american.dish.rankings <- american.dish.rankings %>% filter(dishes %in% american_clean)
+
+american.dish.rankings <- american.dish.rankings[unlist(lapply(american.dish.rankings$dishes,function(dish){
+  sum(grepl(dish,american.dish.rankings$dishes))==1
+})),]
+
+mediterranean.dish.rankings <- mediterranean.dish.rankings %>% filter(dishes %in% mediterranean_clean)
+
+mediterranean.dish.rankings <- mediterranean.dish.rankings[unlist(lapply(mediterranean.dish.rankings$dishes,function(dish){
+  sum(grepl(dish,mediterranean.dish.rankings$dishes))==1
+})),]
+
+mexican.dish.rankings <- mexican.dish.rankings %>% filter(dishes %in% mexican_clean)
+
+mexican.dish.rankings <- mexican.dish.rankings[unlist(lapply(mexican.dish.rankings$dishes,function(dish){
+  sum(grepl(dish,mexican.dish.rankings$dishes))==1
+})),]
+
+
+
+```
+
+
+```{r,echo=FALSE,fig.width=9,fig.height=8,fig.cap="Figure 1. Dishes ranked by document frequency for 6 cuisines."}
+
+
+
+to.plot <- bind_rows(italian.dish.rankings %>% arrange(desc(doc.freq)) %>% mutate(cuisine="Italian") %>% slice(1:20),
+          chinese.dish.rankings %>% arrange(desc(doc.freq)) %>% mutate(cuisine="Chinese") %>% slice(1:20),
+          indian.dish.rankings %>% arrange(desc(doc.freq)) %>% mutate(cuisine="Indian") %>% slice(1:20),
+          mexican.dish.rankings %>% arrange(desc(doc.freq)) %>% mutate(cuisine="Mexican") %>% slice(1:20),
+          mediterranean.dish.rankings %>% arrange(desc(doc.freq)) %>% mutate(cuisine="Mediterranean") %>% slice(1:20),
+          american.dish.rankings %>% arrange(desc(doc.freq)) %>% mutate(cuisine="American") %>% slice(1:20)) %>% mutate(n=as.numeric(factor(cuisine))) %>% group_by(cuisine,dishes) %>% mutate(x=paste(c(rep(' ',n-1), dishes), collapse='')) %>% ungroup() %>% mutate(x=factor(x, levels=x[order(doc.freq,decreasing=TRUE)]))
+
+
+ggplot(to.plot,aes(x=x,y=doc.freq,fill=doc.freq))+geom_bar(position="dodge",stat="identity")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+facet_wrap(~ cuisine,scales="free",nrow=3)+ scale_fill_continuous(name="Doc. Freq.") + ylab("Document Frequency")+xlab("")
+
+
+
+```
+
+**Figure 1. Dishes ranked by document frequency for six cuisines.**
+
+```{r,echo=FALSE,fig.width=9,fig.height=8,fig.cap="Figure 2. Dishes ranked by average review stars for 6 cuisines."}
+
+
+to.plot <- bind_rows(italian.dish.rankings %>% arrange(desc(stars)) %>% mutate(cuisine="Italian") %>% slice(1:20),
+          chinese.dish.rankings %>% arrange(desc(stars)) %>% mutate(cuisine="Chinese") %>% slice(1:20),
+          indian.dish.rankings %>% arrange(desc(stars)) %>% mutate(cuisine="Indian") %>% slice(1:20),
+          mexican.dish.rankings %>% arrange(desc(stars)) %>% mutate(cuisine="Mexican") %>% slice(1:20),
+          mediterranean.dish.rankings %>% arrange(desc(stars)) %>% mutate(cuisine="Mediterranean") %>% slice(1:20),
+          american.dish.rankings %>% arrange(desc(stars)) %>% mutate(cuisine="American") %>% slice(1:20)) %>% mutate(n=as.numeric(factor(cuisine))) %>% group_by(cuisine,dishes) %>% mutate(x=paste(c(rep(' ',n-1), dishes), collapse='')) %>% ungroup() %>% mutate(x=factor(x, levels=x[order(stars,decreasing=TRUE)]))
+
+
+ggplot(to.plot,aes(x=x,y=stars,fill=stars))+geom_bar(position="dodge",stat="identity")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+facet_wrap(~ cuisine,scales="free",nrow=3)+ scale_fill_continuous(name="Stars") + ylab("Stars")+xlab("")
+
+
+
+```
+
+**Figure 2. Dishes ranked by average review stars for six cuisines.**
+
+
+```{r,echo=FALSE,fig.width=9,fig.height=8,fig.cap="Figure 3. Dishes ranked by topic weighted document frequency for 6 cuisines."}
+
+
+to.plot <- bind_rows(italian.dish.rankings %>% arrange(desc(doc.freq.topic)) %>% mutate(cuisine="Italian") %>% slice(1:20),
+          chinese.dish.rankings %>% arrange(desc(doc.freq.topic)) %>% mutate(cuisine="Chinese") %>% slice(1:20),
+          indian.dish.rankings %>% arrange(desc(doc.freq.topic)) %>% mutate(cuisine="Indian") %>% slice(1:20),
+          mexican.dish.rankings %>% arrange(desc(doc.freq.topic)) %>% mutate(cuisine="Mexican") %>% slice(1:20),
+          mediterranean.dish.rankings %>% arrange(desc(doc.freq.topic)) %>% mutate(cuisine="Mediterranean") %>% slice(1:20),
+          american.dish.rankings %>% arrange(desc(doc.freq.topic)) %>% mutate(cuisine="American") %>% slice(1:20)) %>% mutate(n=as.numeric(factor(cuisine))) %>% group_by(cuisine,dishes) %>% mutate(x=paste(c(rep(' ',n-1), dishes), collapse='')) %>% ungroup() %>% mutate(x=factor(x, levels=x[order(doc.freq.topic,decreasing=TRUE)]))
+
+
+ggplot(to.plot,aes(x=x,y=doc.freq.topic,fill=doc.freq.topic))+geom_bar(position="dodge",stat="identity")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+facet_wrap(~ cuisine,scales="free",nrow=3)+ scale_fill_continuous(name="Topic Weighted Doc. Freq.")+ylab("Topic Weighted Document Frequency")+xlab("")
+
+
+
+```
+
+**Figure 3. Dishes ranked by topic weighted document frequency for six cuisines.**
+
+```{r,echo=FALSE,fig.width=9,fig.height=8,fig.cap="Figure 4. Dishes ranked by topic weighted average review stars for 6 cuisines."}
+
+
+to.plot <- bind_rows(italian.dish.rankings %>% arrange(desc(stars.topic)) %>% mutate(cuisine="Italian") %>% slice(1:20),
+          chinese.dish.rankings %>% arrange(desc(stars.topic)) %>% mutate(cuisine="Chinese") %>% slice(1:20),
+          indian.dish.rankings %>% arrange(desc(stars.topic)) %>% mutate(cuisine="Indian") %>% slice(1:20),
+          mexican.dish.rankings %>% arrange(desc(stars.topic)) %>% mutate(cuisine="Mexican") %>% slice(1:20),
+          mediterranean.dish.rankings %>% arrange(desc(stars.topic)) %>% mutate(cuisine="Mediterranean") %>% slice(1:20),
+          american.dish.rankings %>% arrange(desc(stars.topic)) %>% mutate(cuisine="American") %>% slice(1:20)) %>% mutate(n=as.numeric(factor(cuisine))) %>% group_by(cuisine,dishes) %>% mutate(x=paste(c(rep(' ',n-1), dishes), collapse='')) %>% ungroup() %>% mutate(x=factor(x, levels=x[order(stars.topic,decreasing=TRUE)]),stars.topic=stars.topic/max(stars.topic)*5)
+
+
+ggplot(to.plot,aes(x=x,y=stars.topic,fill=stars.topic))+geom_bar(position="dodge",stat="identity")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+facet_wrap(~ cuisine,scales="free",nrow=3)+ scale_fill_continuous(name="Topic Weighted Stars")+ylab("Topic Weighted Stars")+xlab("")
+
+
+
+```
+
+**Figure 4. Dishes ranked by topic weighted average review stars for six cuisines.**
+
+###<a name="s3_2"></a>3.2 Restaurant recommendations
+
+We will show only restaurant recommendations using topic weighted average stars as the rating that one restaurant gets on a particular dish according to the customer reviews. In Figure 5 we can see the ranking of restaurants serving peperonata. As we can see, we have fewer than 20 elements because peperonata only appears in the reviews of 10 restaurants.
+
+Could we infer how good would be the peperonata in other restaurants provided that they serve the dish?  We can extend our list or recommended restaurants (Figure 6) using an user-based collaborative filter. As we can see, we expect that some restaurants that don’t include a mention to peperonata in their reviews would cook the dish better than other restaurants that we know that they make the dish. The Yelp dataset does not include the menu of the restaurants, but if we had that information, we could filter the ranking to keep only those restaurants that cook the dish.
+
+```{r,echo=FALSE}
+
+load('../results/restaurant_recommendation/dish_rating_matrices.RData')
+load("../data/R/business.RData")
+
+ratings <- t(italian.business.ratings$dish.business.stars.topics)
+
+
+sparse <- sparseMatrix(i=ratings$i, j=ratings$j, x=ratings$v,
+                       dims=c(ratings$nrow, ratings$ncol))
+
+r <- new("realRatingMatrix",data=sparse)
+
+
+
+rownames(r) <- rownames(ratings)
+colnames(r) <- colnames(ratings)
+rec <- Recommender(r,method="UBCF")
+
+dish <- "peperonata"
+n <- 20
+p <- predict(rec,match(dish,rownames(r)),n=n,data=r)
+
+p2 <- predict(rec,match(dish,rownames(r)),n=n,data=r,type="ratings")
+
+real.ratings <-as.vector(r[match(dish,rownames(r)),]@data)
+
+names(real.ratings) <- colnames(r)
+real.ratings <- real.ratings[order(real.ratings,decreasing = TRUE)]
+real.ratings <- real.ratings[real.ratings>0]
+
+p2@data[1,names(real.ratings)] <- real.ratings
+
+rating.business <- as.vector(p2@data)
+names(rating.business) <- colnames(p2@data)
+rating.business <- rating.business[order(rating.business,decreasing = TRUE)]
+
+
+real.ratings.business <- data.frame(name=business$name[match(names(real.ratings),business$business_id)],rating=real.ratings,stringsAsFactors = FALSE) %>% mutate(rating=rating/max(rating)*5)
+
+CF.ratings.business <- data.frame(name=business$name[match(names(rating.business),business$business_id)][1:n],order=1:n,rating=rating.business[1:20],stringsAsFactors = FALSE) %>% mutate(dish.confirmed=name %in% real.ratings.business$name) %>% mutate(rating=rating/max(rating)*5)
+
+
+```
+
+
+```{r,echo=FALSE,fig.width=9,fig.height=5,fig.cap="Figure 5. Restaurant recommendations for the italian dish peperonata."}
+
+
+
+ggplot(real.ratings.business,aes(x=factor(name,name),y=rating,fill=rating))+geom_bar(position="dodge",stat="identity")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+ scale_fill_continuous(name="Topic Weighted Stars")+ylab("Topic Weighted Stars")+xlab("")
+
+
+```
+
+**Figure 5. Restaurant recommendations for the italian dish peperonata.**
+
+```{r,echo=FALSE,fig.width=9,fig.height=5,fig.cap="Figure 6. Restaurant recommendations for the italian dish peperonata using aggregated topic weighted stars and a user based colaborative filter. The stars on top of the bars indicate the restaurants that are known to serve peperonata."}
+
+
+
+ggplot(CF.ratings.business,aes(x=factor(name,name),y=rating,fill=rating))+geom_bar(position="dodge",stat="identity")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+ scale_fill_continuous(name="Topic Weighted Stars")+ylab("Topic Weighted Stars")+xlab("")+geom_text(data=CF.ratings.business %>% filter(dish.confirmed),label="*")
+
+
+```
+
+**Figure 6. Restaurant recommendations for the italian dish peperonata using aggregated topic weighted stars and an user-based colaborative filter. The stars on top of the bars indicate the restaurants that are known to serve peperonata.**
+
+##<a name="s4"></a>4. Discussion
+
+We have ranked dishes according to their popularity in Yelp reviews. We have used four different scores to compute the rankings.
+
+The document frequency is not a good indication of popularity when we are using a list of dishes automatically mined. As in any automatic process, the algorithms used to extract dishes from the reviews fail sometimes and include terms that are not dishes. Terms that we can expect to appear frequently in a culinary context ("cooked to perfection" for example) often appear among the most frequent terms and thus high in the dish ranking.
+
+Our second approach was to compute a weighted document frequency in which we assign a higher weight to those documents more related to food according to a three topic LDA model. The results are only slightly better because the non-dishes are likely to appear in a culinary context.
+
+Using the average stars of the reviews that mention a dish was a significant improvement. Customer ratings often represent their global experience. So, a customer happy with the service is often happy with the food too, and dishes are often mentioned in positive reviews. Nevertheless, opinions about dishes are mixed with opinions about other aspects of their experience.  A dish only briefly mentioned in a positive review about the restaurant service or ambience would have its average rating artificially inflated. For this reason, we find that using weighted average stars, with higher weights for those reviews that are more likely to belong to the food topic, is a better score for ranking popular dishes.
+
+We have also implemented a top-N recommender of restaurants for a given dish. First, we used a simple approach consisting in aggregating the dishes scores by restaurant and then sorting the restaurants in decreasing order of score for a particular dish. However, customer reviews are not an exhaustive review of a restaurant menu, so we tried to extend our recommendation by inferring a score of other restaurants that do not include the dish in their reviews. To do this, we have implemented an user-based collaborative filter that allows to predict the score of a restaurant for a dish.
+
+##5. References
+
+1. [Recommenderlab in CRAN](https://cran.r-project.org/web/packages/recommenderlab/index.html)
