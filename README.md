@@ -65,3 +65,12 @@ To reproduce the analysis, first unzip the Yelp JSON files in the data folder an
 5. Run **scripts/dish_recognition/cross_cuisines.R** to combine all the algorithms results for each cuisine.
 
 6. Run **reports/03-Dish_Discovery.Rmd** to knit a report about the results.
+
+### Task 4. Dish ranking
+
+1. Run **scripts/dish_ranking/dishes_count.R** Computes the document frequency of each dish in the restaurant reviews corpus.
+
+2. Run **scripts/dish_ranking/topicmodel.R** Computes a topic model for the corpus of restaurant reviews. 3 topics
+3. Run **scripts/dish_ranking/dish_rankings.R** Computes dish rankings for 6 cuisines using 4 scores: document frequency, average review stars, and versions of the two scores weighted by the probability that the reviews belong to a food topic.
+
+

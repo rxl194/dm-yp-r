@@ -6,6 +6,8 @@ This folder contains R scripts used to analyze the data.
 
 - **cuisine_clustering**. This folder contains scripts used to compute the results used in the Cuisine Clustering and Map Construction step.
 - **dish_recognition**. This folder contains scripts for dish discovery using Yelp reviews and the algorithms: word2vect, TopMine, SegPhrase.
+- **dish_ranking**. This folder contains scripts used to rank the dishes discovered according to their popularity.
+- **restaurant_recommendation**. Contains scripts used to recommend restaurants for a given dish.
 
 ## Helper scripts
 
