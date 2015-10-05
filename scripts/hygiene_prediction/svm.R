@@ -3,7 +3,6 @@ require(ROCR)
 require(dplyr)
 require(slam)
 require(topicmodels)
-require(ggplot2)
 
 
 
@@ -12,49 +11,41 @@ load('results/hygiene_prediction/data.RData')
 topic <- TRUE
 
 if(topic){
-
-load('results/hygiene_prediction/reviews_topic_model_50.RData')
-
-
-topics.training <- fit@gamma[match(training$id,fit@documents),]
-
-topics.test <- fit@gamma[match(test$id,fit@documents),]
-
-topics.test[is.na(rowSums(topics.test)),] <- 1/ncol(topics.test)
-
-training <- cbind(training,topics.training)
-
-training <- training %>% dplyr::select(-reviews_text,-restaurant_cuisines,-id,-restaurant_zip)
-
-test <- cbind(test,topics.test)
-    
+  
+  load('results/hygiene_prediction/reviews_topic_model_50.RData')
+  
+  
+  topics.training <- fit@gamma[match(training$id,fit@documents),]
+  
+  topics.test <- fit@gamma[match(test$id,fit@documents),]
+  
+  topics.test[is.na(rowSums(topics.test)),] <- 1/ncol(topics.test)
+  
+  training <- cbind(training,topics.training)
+  
+  training <- training %>% select(-reviews_text,-restaurant_cuisines,-id)
+  
+  test <- cbind(test,topics.test)
+  
 }else{
   
   load('results/hygiene_prediction/reviews.unigram.reduced.RData')
-  training <- training %>% dplyr::select(-reviews_text,-restaurant_cuisines)
+  training <- training %>% select(-reviews_text,-restaurant_cuisines)
   
   
   training <- cbind(training[match(training$id,rownames(dtm.review.unigram)),],data.frame(as.matrix(dtm.review.unigram[as.character(1:546),])))
-  training <- training %>% dplyr::select(-id)
-  test.ids <- test$id
-  missing.test <- test %>% filter(id %in% test.ids[!test.ids %in% rownames(dtm.review.unigram)])
-  missing.test <- cbind(missing.test, t(rep(0,ncol(dtm.review.unigram))))
-  names(missing.test) <- names(test)
+  training <- training %>% select(-id)
+  
   x <- test %>% filter(id %in% rownames(dtm.review.unigram))
   
   test <- cbind(x,data.frame(as.matrix(dtm.review.unigram[(nrow(training)+1):nrow(dtm.review.unigram),])))
   
-  test <- rbind(test,missing.test)
-  
-  test <- test[order(as.numeric(test$id),decreasing = TRUE),]
 }
 
 
 
 
-
-
-#training <- training %>% mutate(hygiene_label=factor(hygiene_label))
+training <- training %>% mutate(hygiene_label=factor(hygiene_label))
 
 set.seed(200)
 train.index <- createDataPartition(y = training$hygiene_label,p=0.8,list = FALSE)
@@ -72,10 +63,10 @@ F1 <- function(data,lev,model){
 
 resampling.control <- trainControl(method="cv",number=10,verboseIter = TRUE,summaryFunction = F1)
 
-rfFit <- train(hygiene_label ~ ., data=train.set, method="rf",trControl=resampling.control)
+svmFit <- train(hygiene_label ~ ., data=train.set, method="svmPoly",trControl=resampling.control)
 
 
-pred <- predict(rfFit,newdata = test.set,type="raw")
+pred <- predict(svmFit,newdata = test.set,type="raw")
 
 pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
 
@@ -84,11 +75,9 @@ perf<- performance(pred,"tpr","fpr")
 
 ggplot(data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]]),aes(x=FP,y=TP))+geom_line()+geom_abline(slope=1)
 
-performance(pred,"auc")
+perf<- performance(pred,"auc")
 
 perf<- performance(pred,"f")
-
-
 
 ggplot(data.frame(cutoff=perf@x.values[[1]],F1=perf@y.values[[1]]),aes(x=cutoff,y=F1))+geom_line()
 
@@ -96,10 +85,6 @@ perf<- performance(pred,"sens")
 
 ggplot(data.frame(cutoff=perf@x.values[[1]],sens=perf@y.values[[1]]),aes(x=cutoff,y=sens))+geom_line()
 
-perf<- performance(pred,"fpr","f")
+submission.prediction <- as.character(predict(svmFit,newdata=test))
 
-ggplot(data.frame(FP=perf@x.values[[1]],F1=perf@y.values[[1]]),aes(x=FP,y=F1))+geom_line()
-
-submission.prediction <- as.character(predict(rfFit,newdata=test))
-
-save(rfFit,submission.prediction,file="results/hygiene_prediction/random_forest.RData")
+save(svmFit,submission.prediction,file="results/hygiene_prediction/svm.RData")

@@ -1,3 +1,7 @@
+require(slam)
+require(dplyr)
+require(ggplot2)
+
 load('results/hygiene_prediction/review.unigram.RData')
 
 
