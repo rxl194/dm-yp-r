@@ -8,6 +8,7 @@ This folder contains R scripts used to analyze the data.
 - **dish_recognition**. This folder contains scripts for dish discovery using Yelp reviews and the algorithms: word2vect, TopMine, SegPhrase.
 - **dish_ranking**. This folder contains scripts used to rank the dishes discovered according to their popularity.
 - **restaurant_recommendation**. Contains scripts used to recommend restaurants for a given dish.
+- **hygiene_prediction**. Contains scripts used to predict the outcome of a hygiene inspecion on resturants according to their reviews.
 
 ## Helper scripts
 

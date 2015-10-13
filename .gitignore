@@ -11,3 +11,4 @@ topicmodel_visualization.R
 *.pdf
 *.pages
 reports/rsconnect/
+reports/hygiene_prediction/

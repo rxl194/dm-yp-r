@@ -66,11 +66,30 @@ To reproduce the analysis, first unzip the Yelp JSON files in the data folder an
 
 6. Run **reports/03-Dish_Discovery.Rmd** to knit a report about the results.
 
-### Task 4. Dish ranking
+## Task 4. Dish ranking
 
-1. Run **scripts/dish_ranking/dishes_count.R** Computes the document frequency of each dish in the restaurant reviews corpus.
+1. Run **scripts/dish_ranking/dishes_count.R** to ompute the document frequency of each dish in the restaurant reviews corpus.
 
-2. Run **scripts/dish_ranking/topicmodel.R** Computes a topic model for the corpus of restaurant reviews. 3 topics
-3. Run **scripts/dish_ranking/dish_rankings.R** Computes dish rankings for 6 cuisines using 4 scores: document frequency, average review stars, and versions of the two scores weighted by the probability that the reviews belong to a food topic.
+2. Run **scripts/dish_ranking/topicmodel.R** to compute a topic model for the corpus of restaurant reviews. 3 topics
+3. Run **scripts/dish_ranking/dish_rankings.R** to compute dish rankings for 6 cuisines using 4 scores: document frequency, average review stars, and versions of the two scores weighted by the probability that the reviews belong to a food topic.
 
+## Task 5. Restaurant recommender
+
+1. Run **scripts/restaurant_recommendation/restaurant_dishes_ratings.R** to compute the dishes-restaurants ratings matrix for 6 cuisines and for the 4 scored used to rank dishes.
+
+2. Run **reports/04-05-Dish_Ranking_Restaurant_Recommendation.Rmd** to knit a report about the results of tasks 4 and 5.
+
+## Task 6. Higiene prediction
+
+1. Run **scripts/hygiene_prediction/read_data.R** to read the data and store it in RData files.
+2. Run **scripts/hygiene_prediction/language_model.R** to build an unigram language model for the reviews.
+3. Run **scripts/hygiene_prediction/reduced_language_model.R** to create a reduced version of the unigram language model by keeping only those terms that account for 99% of the words in the corpus.
+4. Run **scripts/hygiene_prediction/topicmodel.R** to compute a topic model from the non-reduced laguage model
+5. Run **scripts/hygiene_prediction/training_test_dtm_unigram.R** to concatenate the reduced unigram language model to other features in the training and test set.
+6. Run **scripts/hygiene_prediction/training_test_topic_model_50.R** to concatenate the results of a topic model to other features in the training and test set.
+7. Run **scripts/hygiene_prediction/training_test_topic_model_label1_100.R** to concatenate the results of a topic model trained only on the positive training samples to other features in the traning and test set.
+8. Run **scripts/hygiene_prediction/random_forest.R** to train a classifier using random forest
+9. Run **scripts/hygiene_prediction/svm.R** to trains a classifier using SVM
+10. Run **scripts/hygiene_prediction/logistic.R** to trains a classifier using logistic regression.
+11. Run **reports/Hygiene_prediction.Rmd** to generate a report for this task.
 

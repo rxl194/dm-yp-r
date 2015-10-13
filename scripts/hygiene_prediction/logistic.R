@@ -3,50 +3,50 @@ require(ROCR)
 require(dplyr)
 require(slam)
 require(topicmodels)
+require(ggplot2)
+require(tm)
+require(stringr)
+require(RWeka)
+
+load('results/hygiene_prediction/training_test_dtm_unigram.RData')
+# training.dtm <- training[,-c(1:7)]
+# test.dtm <- test[,-c(1:6)]
+#load("results/hygiene_prediction/training_test_topic_model_50.RData")
+
+# test.topic <- test %>% dplyr::select(T=starts_with("X"))
+# training.topic <- training %>% dplyr::select(T=starts_with("X"))
+# 
+#load("results/hygiene_prediction/training_test_topic_model_label1_100.RData")
+# 
+# training <- cbind(training,training.topic,training.dtm)
+# test <- cbind(test,test.topic,test.dtm)
 
 
-
-load('results/hygiene_prediction/data.RData')
-
-topic <- TRUE
-
-if(topic){
+cuisines.factor <- function(dataset){
+  cuisines <- str_split(gsub("\\[|\\]|'","",dataset$restaurant_cuisines),",")
+  cuisines <- rbind_all(lapply(cuisines,function(x){
+    
+    r <- data.frame(t(rep(1,length(x))))
+    colnames(r) <- x
+    r
+  }))
   
-  load('results/hygiene_prediction/reviews_topic_model_50.RData')
+  cuisines[is.na(cuisines)] <- 0
   
+  cuisines <-cuisines %>% mutate_each(funs(factor))
   
-  topics.training <- fit@gamma[match(training$id,fit@documents),]
-  
-  topics.test <- fit@gamma[match(test$id,fit@documents),]
-  
-  topics.test[is.na(rowSums(topics.test)),] <- 1/ncol(topics.test)
-  
-  training <- cbind(training,topics.training)
-  
-  training <- training %>% select(-reviews_text,-restaurant_cuisines,-id)
-  
-  test <- cbind(test,topics.test)
-  
-}else{
-  
-  load('results/hygiene_prediction/reviews.unigram.reduced.RData')
-  training <- training %>% select(-reviews_text,-restaurant_cuisines)
-  
-  
-  training <- cbind(training[match(training$id,rownames(dtm.review.unigram)),],data.frame(as.matrix(dtm.review.unigram[as.character(1:546),])))
-  training <- training %>% select(-id)
-  
-  x <- test %>% filter(id %in% rownames(dtm.review.unigram))
-  
-  test <- cbind(x,data.frame(as.matrix(dtm.review.unigram[(nrow(training)+1):nrow(dtm.review.unigram),])))
+  cuisines
   
 }
 
 
 
 
-training <- training %>% mutate(hygiene_label=factor(hygiene_label))
+training <- cbind(training,cuisines.factor(training))
 
+training <- training %>% dplyr::select(-reviews_text,-restaurant_cuisines,-id)
+
+test <- cbind(test,cuisines.factor(test))
 set.seed(200)
 train.index <- createDataPartition(y = training$hygiene_label,p=0.8,list = FALSE)
 
@@ -56,12 +56,14 @@ test.set <- training[-train.index,]
 F1 <- function(data,lev,model){
   
   pred <- prediction(as.numeric(as.character(data$pred)), as.numeric(as.character(data$obs)))
-  out <-performance(pred,"f")@x.values[[1]][2]
+  out <-performance(pred,"f")@y.values[[1]][2]
   names(out) <- c("F1")
   out
 }
 
 resampling.control <- trainControl(method="cv",number=10,verboseIter = TRUE,summaryFunction = F1)
+
+set.seed(300)
 
 logisticFit <- train(hygiene_label ~ ., data=train.set, method="glmStepAIC",family=binomial,trControl=resampling.control)
 
@@ -85,6 +87,6 @@ perf<- performance(pred,"sens")
 
 ggplot(data.frame(cutoff=perf@x.values[[1]],sens=perf@y.values[[1]]),aes(x=cutoff,y=sens))+geom_line()
 
-submission.prediction <- as.character(predict(logisticFit,newdata=test))
+submission.prediction <- as.character(as.numeric(predict(logisticFit,newdata=test) >0.5))
 
-save(logisticFit,submission.prediction,file="results/hygiene_prediction/logistic.RData")
+save(logisticFit,submission.prediction,file="results/hygiene_prediction/logistic_dtm_unigram.RData")

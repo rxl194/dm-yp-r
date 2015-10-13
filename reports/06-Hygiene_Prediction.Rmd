@@ -1,0 +1,439 @@
+---
+title: "Task 6- Hygiene prediction"
+author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
+output: pdf_document
+---
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+
+require(caret)
+require(ROCR)
+require(ggplot2)
+
+```
+
+## 1. Introduction
+
+In this task, we use restaurant reviews to predict whether they will pass a hygiene inspection or not. This is a supervised machine learning application of text timing.
+
+## 2. Methods
+
+
+### 2.1 Data
+
+The data is a corpus of 13,299 documents in which each document is the result of concatenating all the Yelp reviews of a restaurant. In addition to the reviews, we have the following additional data for each restaurant:
+
+- cuisines offered.
+- ZIP code.
+- number of reviews.
+- average rating in a 0 to 5 scale (5 being the best).
+
+For 546 restaurants, we have a label indicating whether the restaurant has passed the latest public health inspection test (0) or not (1). We do not have a label for the remaining 12,753 (the evaluation set). Our task is to use the 546 labeled records as the training set to train a classifier that predicts the label of the remaining 12,753 to predict whether they would pass the hygiene inspection or not. The performance of our classifier will be measured using an F1 measure.
+
+One important feature of this dataset is that the training set has a balanced distribution of 0/1 labels, but the evaluation is unbalanced.
+
+
+### 2.2 Classifier training
+
+In training a classifier, two aspects are crucial: the supervised machine learning used to train our model and the features used as input. 
+
+#### 2.2.1 Features
+
+**Features extracted from reviews.**
+
+```{r,echo=FALSE}
+
+load('../results/hygiene_prediction/review.unigram.RData')
+
+```
+
+
+We preprocessed the reviews as follows:
+
+- Remove non-writable characters.
+- Strip extra white spaces.
+- Lower case.
+- Remove punctuation
+- Remove numbers
+- Stemming
+- Stop words removal.
+
+After that, each text was tokenized into unigrams, and the unigram frequencies were counted and stored into a document-term matrix of counts with a vocabulary of `r nrow(dtm.review.unigram)` terms.
+
+```{r,echo=FALSE}
+
+load('../results/hygiene_prediction/reviews.unigram.reduced.RData')
+
+```
+
+Term counts across all the corpus showed a typical Zipf distribution. We kept the most frequent terms that, summing all their frequencies, accounted for about 99% of the total number of words in the corpus. The resulting vocabulary has `r ncol(dtm.review.unigram)` words. This reduced document-term matrix is the first set of text extracted features used for hygiene prediction.
+
+To preprocess the text data and compute the document-term matrices we used the R packages "tm" [1] (v 0.6) and "RWeka" [1] (v 0.4-24).
+
+To build the second set of features, we trained a topic model with 100 topics. We run a Latent Dirichlet Allocation algorithm (LDA) using the non-reduced document-term frequencies matrix as input. To estimate the model parameters we used a Gibbs sampling with a burn-in phase of 1000 iterations and later the distribution was sampled every 100 iterations during 2000 iterations. Then we used the matrix of topic probabilities for the documents as our text extracted features. We used the R package "topicmodels" [3] (v 0.2) to compute the topic models in this task.
+
+A third approach consisted in training a 100 topics model using as input only the reviews in the training set that didn't pass the hygiene inspection. The idea behind this approach is to extract specific features for the minority class to increase our specificity. Once we had the model, we computed the posterior probabilities over the remaining reviews in the training and test set and we built a matrix of document-topic probabilities similar to the one mentioned above.
+
+**Additional features**
+
+Together with the reviews, other features were provided: average rating, the number of reviews, cuisine categories and ZIP code. We used average rating and number of reviews as regular numeric features. The ZIP code was encoded as a factor and finally the cuisine categories were encoded using a set of dummy variables that took a value of 1 for the categories that the restaurant belonged and 0 for the others.
+
+### 2.2.2 Training algorithms
+
+This task is a supervised machine learning classification task. We have selected three algorithms to train our models: random forest, SVM with polynomial kernel and logistic regression.
+
+In all cases, we built a matrix of features concatenating each of the text features with all the additional features. We hold 20% of the training cases to evaluate the performance of our approaches (test set), and we used the remaining 80% to train our classifiers.
+
+To train a classifier with any of the algorithms mentioned above, we used 10-fold cross-validation using the training set for model parameter selection. Once we selected the model parameters, we trained our final model over the complete training set.
+
+We have used the R package `caret` (v 6.0) [4] to train our classifiers. Concretely, the method parameter passed to the function `train` that we used were:
+
+- `rf` for random forest.
+- `svmPoly` for the SVM with a polynomial kernel.
+- `glmStepAIC` for logistic regression.
+
+### 2.2.3 Algorithm performance evaluation
+
+Although the performance of our algorithm will be determined by an autograder using our predictions over the evaluation set, we have a limited number of submissions. For that reason, we have held out a 20% of the training data as a test set in which we can perform our evaluation of the algorithm performance.
+
+We have assessed the performance in two ways: graphing the receiver operating characteristic (ROC) curve for our prediction over the test set and computing the F1 measure for the prediction on the test set. To compute the measures of performance we used the R package `ROCR`[5]
+
+
+## 3. Results
+
+Figure 1. shows the ROC curve for Random Forest using five combinations of features:
+
+1. Reduced document-term matrix + additional features (unigram)
+2. Topic model with 50 topics  + additional features (TM50)
+3. Topic model with 100 features for label 1 cases + additional features (TM_label1)
+4. Topic model with 50 topics + topic model with 100 features for label 1 cases + additional features. (TM50+TM_label1)
+5. Reduced document-term matrix + Topic model with 50 topics + topic model with 100 features for label 1 cases + additional features. (unigram+TM50+TM_label1)
+
+Figure 2 shows the same information for SVM. Figure 3 show the ROC curve for logistic regression, but only for combinations 2 and 3.
+
+Figure 4 shows the corresponding F1 for each algorithm and features combination.
+
+As we can see, random forest using a combination of all the features obtained gives the best result. Nevertheless, although the F1 measure on the hold-out test set is close to 0.8, the F1 score obtained in the evaluation set on the Coursera platform was only 0.5577.
+
+```{r,echo=FALSE,cache=TRUE,warning=FALSE,message=FALSE}
+
+load('../results/hygiene_prediction/random_forest_dtm_unigram.RData')
+
+pred <- predict(rfFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="unigram")
+
+F1.unigram <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+
+load('../results/hygiene_prediction/random_forest_topic_model_50.RData.RData')
+
+pred <- predict(rfFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM50"))
+
+F1.TM50 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+load('../results/hygiene_prediction/random_forest_topic_model_label1_100.RData.RData')
+
+pred <- predict(rfFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM_label1"))
+
+F1.TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+load('../results/hygiene_prediction/random_forest_topic_model_50_label1_100.RData')
+
+pred <- predict(rfFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM50+TM_label1"))
+
+F1.TM50_TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+load('../results/hygiene_prediction/random_forest_dtm_unigram_topic_model_50_label1_100.RData')
+
+pred <- predict(rfFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="unigram+TM50+TM_label1"))
+
+F1.unigram_TM50_TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+```
+
+```{r,echo=FALSE}
+
+ggplot(to.plot,aes(x=FP,y=TP,color=dataset))+geom_line()+geom_abline(slope=1)+ylab("True Positive Rate")+xlab("False Positive Rate")
+
+
+```
+
+**Figure 1. ROC curve for classifiers trained using random forest and different features combinations.**
+
+```{r,echo=FALSE,cache=TRUE}
+
+F1.to.plot <- data.frame(F1=c(F1.unigram,F1.TM50,F1.TM_label1,F1.TM50_TM_label1,F1.unigram_TM50_TM_label1),dataset=c("unigram","TM50","TM_label1","TM50+TM_label1","unigram+TM50+label1"),method="Random Forest",stringsAsFactors = FALSE)
+
+```
+
+
+```{r,echo=FALSE,cache=TRUE,warning=FALSE,message=FALSE}
+
+load('../results/hygiene_prediction/svm_dtm_unigram.RData')
+
+pred <- predict(svmFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="unigram")
+
+F1.unigram <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+
+load('../results/hygiene_prediction/svm_topic_model_50.RData')
+
+pred <- predict(svmFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM50"))
+
+F1.TM50 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+load('../results/hygiene_prediction/svm_topic_model_label1_100.RData')
+
+pred <- predict(svmFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM_label1"))
+
+F1.TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+load('../results/hygiene_prediction/svm_topic_model_50_label1_100.RData')
+
+pred <- predict(svmFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM50+TM_label1"))
+
+F1.TM50_TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+load('../results/hygiene_prediction/svm_dtm_unigram_topic_model_50_label1_100.RData')
+
+pred <- predict(svmFit,newdata = test.set)
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="unigram+TM50+TM_label1"))
+
+F1.unigram_TM50_TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+
+
+
+
+
+```
+
+
+```{r,echo=FALSE}
+
+ggplot(to.plot,aes(x=FP,y=TP,color=dataset))+geom_line()+geom_abline(slope=1)+ylab("True Positive Rate")+xlab("False Positive Rate")
+
+```
+
+**Figure 2. ROC curve for classifiers trained using SVM with polynomial kernel and different features combinations.**
+
+```{r,echo=FALSE,cache=TRUE}
+
+F1.to.plot <- rbind(F1.to.plot,data.frame(F1=c(F1.unigram,F1.TM50,F1.TM_label1,F1.TM50_TM_label1,F1.unigram_TM50_TM_label1),dataset=c("unigram","TM50","TM_label1","TM50+TM_label1","unigram+TM50+label1"),method="SVM",stringsAsFactors = FALSE))
+
+```
+
+
+```{r,echo=FALSE,cache=TRUE,warning=FALSE,message=FALSE}
+
+to.plot <- data.frame()
+
+# load('../results/hygiene_prediction/svm_dtm_unigram.RData')
+# 
+# pred <- predict(svmFit,newdata = test.set)
+# 
+# pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+# 
+# 
+# perf<- performance(pred,"tpr","fpr")
+# 
+# to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="unigram"))
+# 
+# F1.unigram <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+# 
+
+load('../results/hygiene_prediction/logistic_topic_model_50.RData')
+
+pred <- predict(logisticFit,newdata = test.set,type="raw")
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM50"))
+
+F1.TM50 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+load('../results/hygiene_prediction/logistic_topic_model_label1_100.RData')
+
+pred <- predict(logisticFit,newdata = test.set,type="raw")
+
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+
+perf<- performance(pred,"tpr","fpr")
+
+to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM_label1"))
+
+F1.TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+
+# load('../results/hygiene_prediction/svm_topic_model_50_label1_100.RData')
+# 
+# pred <- predict(svmFit,newdata = test.set)
+# 
+# pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+# 
+# 
+# perf<- performance(pred,"tpr","fpr")
+# 
+# to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="TM50+TM_label1"))
+# 
+# F1.TM50_TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+# 
+# load('../results/hygiene_prediction/svm_dtm_unigram_topic_model_50_label1_100.RData')
+# 
+# pred <- predict(svmFit,newdata = test.set)
+# 
+# pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+# 
+# 
+# perf<- performance(pred,"tpr","fpr")
+# 
+# to.plot <- rbind(to.plot,data.frame(FP=perf@x.values[[1]],TP=perf@y.values[[1]],dataset="unigram+TM50+TM_label1"))
+# 
+# F1.unigram_TM50_TM_label1 <- max(performance(pred,"f")@y.values[[1]],na.rm=TRUE)
+# 
+
+
+```
+
+```{r,echo=FALSE,warning=FALSE}
+ggplot(to.plot,aes(x=FP,y=TP,color=dataset))+geom_line()+geom_abline(slope=1)+ylab("True Positive Rate")+xlab("False Positive Rate")
+```
+
+**Figure 3. ROC curve for classifiers trained using logistic regression and different features combinations.**
+
+
+```{r,echo=FALSE,cache=TRUE,warning=FALSE}
+
+F1.to.plot <- rbind(F1.to.plot,data.frame(F1=c(F1.TM50,F1.TM_label1),dataset=c("TM50","TM_label1"),method="Logistic",stringsAsFactors = FALSE))
+
+
+
+
+```
+
+```{r,echo=FALSE,warning=FALSE,fig.width=9,fig.height=4}
+ggplot(F1.to.plot,aes(x=factor(dataset,dataset),fill=method,y=F1))+geom_bar(stat="identity",position=position_dodge())+xlab("Features")
+
+```
+
+**Figure 4. F1 score computed on the hold out test set for all the classifiers trained.**
+
+```{r,echo=FALSE,warning=FALSE,eval=FALSE}
+
+load('../results/hygiene_prediction/random_forest_dtm_unigram_topic_model_50_label1_100.RData')
+
+
+
+pred <- predict(rfFit,newdata = test.set)
+pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
+
+errors <- which(as.numeric(pred@predictions[[1]] >=0.4) != test.set$hygiene_label)
+
+load('../results/hygiene_prediction/training_test_topic_model_50.RData')
+
+set.seed(200)
+train.index <- createDataPartition(y = training$hygiene_label,p=0.8,list = FALSE)
+
+
+
+error_texts <-training[-train.index,]$reviews_text
+
+error_texts <- error_texts[errors]
+
+pred.errors <- data.frame(pred=as.numeric(pred@predictions[[1]] >=0.4),label= test.set$hygiene_label)[errors,]
+
+sum(pred.errors[,2]==1)/nrow(pred.errors)
+error_texts[7]
+```
+
+A closer exam of the prediction errors on the hold-out test set explains the reason of such discrepancy between the performance of the hold-out set and the evaluation set. 91% of the mistakes were caused by false negatives. 
+
+An exam of the reviews does not show any sign of complaints about the restaurants hygiene. Therefore, the dataset does not provide enough information to predict those cases. 
+
+If some of the reviews that should be labeled as 1 in the evaluation set share this lack of information about the restaurant hygiene, we can assume that we will get a high rate of false negatives. This problem, together with the fact that the evaluation set is unbalanced and contains fewer positive cases makes the F1 score drop in the evaluation set.
+
+
+
+## 4. References
+
+1. Ingo Feinerer, Kurt Hornik, and David Meyer (2008). Text Mining Infrastructure in R. Journal of Statistical Software 25(5): 1-54
+
+2. Kurt Hornik, Christian Buchta, Achim Zeileis (2009) Open-Source Machine Learning: R Meets Weka. Computational Statistics, 24(2), 225-232. doi:10.1007/s00180-008-0119-7
+
+3. Hornik, K., Grün, B., 2011. topicmodels: An R package for fitting topic models. Journal of Statistical Software 40, 1–30.
+
+4. [Caret package](http://topepo.github.io/caret/index.html)
+
+5. [ROCR package at CRAN](https://cran.r-project.org/web/packages/ROCR/index.html)
+

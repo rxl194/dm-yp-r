@@ -4,56 +4,49 @@ require(dplyr)
 require(slam)
 require(topicmodels)
 require(ggplot2)
+require(tm)
+require(stringr)
+require(RWeka)
+
+load('results/hygiene_prediction/training_test_dtm_unigram.RData')
+training.dtm <- training[,-c(1:7)]
+test.dtm <- test[,-c(1:6)]
+load("results/hygiene_prediction/training_test_topic_model_50.RData")
+
+test.topic <- test %>% dplyr::select(T=starts_with("X"))
+training.topic <- training %>% dplyr::select(T=starts_with("X"))
+
+load("results/hygiene_prediction/training_test_topic_model_label1_100.RData")
+
+training <- cbind(training,training.topic,training.dtm)
+test <- cbind(test,test.topic,test.dtm)
 
 
-
-load('results/hygiene_prediction/data.RData')
-
-topic <- TRUE
-
-if(topic){
-
-load('results/hygiene_prediction/reviews_topic_model_50.RData')
-
-
-topics.training <- fit@gamma[match(training$id,fit@documents),]
-
-topics.test <- fit@gamma[match(test$id,fit@documents),]
-
-topics.test[is.na(rowSums(topics.test)),] <- 1/ncol(topics.test)
-
-training <- cbind(training,topics.training)
-
-training <- training %>% dplyr::select(-reviews_text,-restaurant_cuisines,-id,-restaurant_zip)
-
-test <- cbind(test,topics.test)
+cuisines.factor <- function(dataset){
+  cuisines <- str_split(gsub("\\[|\\]|'","",dataset$restaurant_cuisines),",")
+  cuisines <- rbind_all(lapply(cuisines,function(x){
     
-}else{
+    r <- data.frame(t(rep(1,length(x))))
+    colnames(r) <- x
+    r
+  }))
   
-  load('results/hygiene_prediction/reviews.unigram.reduced.RData')
-  training <- training %>% dplyr::select(-reviews_text,-restaurant_cuisines)
+  cuisines[is.na(cuisines)] <- 0
   
+  cuisines <-cuisines %>% mutate_each(funs(factor))
   
-  training <- cbind(training[match(training$id,rownames(dtm.review.unigram)),],data.frame(as.matrix(dtm.review.unigram[as.character(1:546),])))
-  training <- training %>% dplyr::select(-id)
-  test.ids <- test$id
-  missing.test <- test %>% filter(id %in% test.ids[!test.ids %in% rownames(dtm.review.unigram)])
-  missing.test <- cbind(missing.test, t(rep(0,ncol(dtm.review.unigram))))
-  names(missing.test) <- names(test)
-  x <- test %>% filter(id %in% rownames(dtm.review.unigram))
+  cuisines
   
-  test <- cbind(x,data.frame(as.matrix(dtm.review.unigram[(nrow(training)+1):nrow(dtm.review.unigram),])))
-  
-  test <- rbind(test,missing.test)
-  
-  test <- test[order(as.numeric(test$id),decreasing = TRUE),]
 }
 
 
 
 
+training <- cbind(training,cuisines.factor(training))
 
+training <- training %>% dplyr::select(-reviews_text,-restaurant_cuisines,-id)
 
+test <- cbind(test,cuisines.factor(test))
 #training <- training %>% mutate(hygiene_label=factor(hygiene_label))
 
 set.seed(200)
@@ -65,17 +58,20 @@ test.set <- training[-train.index,]
 F1 <- function(data,lev,model){
   
   pred <- prediction(as.numeric(as.character(data$pred)), as.numeric(as.character(data$obs)))
-  out <-performance(pred,"f")@x.values[[1]][2]
+  out <-performance(pred,"f")@y.values[[1]][2]
   names(out) <- c("F1")
   out
 }
 
 resampling.control <- trainControl(method="cv",number=10,verboseIter = TRUE,summaryFunction = F1)
 
-rfFit <- train(hygiene_label ~ ., data=train.set, method="rf",trControl=resampling.control)
+mtryGrid <-data.frame(mtry=c(2,seq(5000,ncol(train.set)-1,5000)))
+set.seed(300)
+rfFit <- train(hygiene_label ~ ., data=train.set, method="rf",trControl=resampling.control,tuneGrid=mtryGrid)
 
+plot(rfFit)
 
-pred <- predict(rfFit,newdata = test.set,type="raw")
+pred <- predict(rfFit,newdata = test.set)
 
 pred <- prediction(as.numeric(as.character(pred)),as.numeric(as.character(test.set$hygiene_label)))
 
@@ -88,7 +84,7 @@ performance(pred,"auc")
 
 perf<- performance(pred,"f")
 
-
+cutoff <- perf@x.values[[1]][which.max(perf@y.values[[1]])]
 
 ggplot(data.frame(cutoff=perf@x.values[[1]],F1=perf@y.values[[1]]),aes(x=cutoff,y=F1))+geom_line()
 
@@ -96,10 +92,9 @@ perf<- performance(pred,"sens")
 
 ggplot(data.frame(cutoff=perf@x.values[[1]],sens=perf@y.values[[1]]),aes(x=cutoff,y=sens))+geom_line()
 
-perf<- performance(pred,"fpr","f")
 
-ggplot(data.frame(FP=perf@x.values[[1]],F1=perf@y.values[[1]]),aes(x=FP,y=F1))+geom_line()
+submission.prediction <- as.character(as.numeric(predict(rfFit,newdata = test) >= 0.5))
 
-submission.prediction <- as.character(predict(rfFit,newdata=test))
+sum(submission.prediction=="1")/length(submission.prediction)
 
-save(rfFit,submission.prediction,file="results/hygiene_prediction/random_forest.RData")
+save(rfFit,submission.prediction,train.set,test.set,test,file="results/hygiene_prediction/random_forest_dtm_unigram_topic_model_50_label1_100.RData")
