@@ -79,9 +79,13 @@ if(!require(wordcloud)){
 
 require(wordcloud)
 
-source("../scripts/igraph.plot2.R")
-source("../scripts/graph.circular.R")
 
+
+reportWD <- getwd()
+setwd('../')
+source("scripts/igraph.plot2.R")
+source("scripts/graph.circular.R")
+setwd(reportWD)
 ```
 
 ```{r,echo=FALSE}
