@@ -91,5 +91,8 @@ To reproduce the analysis, first unzip the Yelp JSON files in the data folder an
 8. Run **scripts/hygiene_prediction/random_forest.R** to train a classifier using random forest
 9. Run **scripts/hygiene_prediction/svm.R** to trains a classifier using SVM
 10. Run **scripts/hygiene_prediction/logistic.R** to trains a classifier using logistic regression.
-11. Run **reports/Hygiene_prediction.Rmd** to generate a report for this task.
+11. Run **reports/06-Hygiene_prediction.Rmd** to generate a report for this task.
 
+## Final Report
+
+Run **reports/07-Final_Report.Rmd** to general the final report.

@@ -4,6 +4,7 @@ author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
 output:
   pdf_document:
     toc: yes
+    toc_depth: 4
   html_document:
     toc: yes
 ---
