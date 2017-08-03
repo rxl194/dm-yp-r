@@ -1,5 +1,18 @@
 This project includes all the code used to analyze the data of the [Yelp Dataset Challenge](http://www.yelp.com/dataset_challenge) during the Data Mining Capstone Project of the Data Mining Specialization in Coursera.
 
+# Reports
+
+Reports with the results of this project can be found here:
+
+- [Topic model exploratory analysis](https://rpubs.com/Belethia/108750)
+- [Cuisine Clustering and Map Construction](https://rpubs.com/Belethia/110446)
+- [Dish Discovery](https://rpubs.com/Belethia/114029)
+- [Popular dishes & Restaurant recomendations](https://rpubs.com/Belethia/115541)
+- [Higiene prediction](https://rpubs.com/Belethia/116532)
+- [Final report](https://rpubs.com/Belethia/117506)
+
+# Folder organization
+
 The project is organized in folders as folows.
 
 - data. This folder should contain the Yelp dataset. But due to the data license agreement, it cannot be distributed.
@@ -96,3 +109,5 @@ To reproduce the analysis, first unzip the Yelp JSON files in the data folder an
 ## Final Report
 
 Run **reports/07-Final_Report.Rmd** to general the final report.
+
+
