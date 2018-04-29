@@ -2,12 +2,12 @@
 title: "Exploratory Analysis of  Yelp Restaurant Reviews"
 author: "Juan Luis Herrera Cortijo (juan.luis.herrera.cortijo@gmail.com)"
 output:
-  html_document:
-    fig_caption: yes
   pdf_document:
     fig_caption: yes
     fig_crop: no
     keep_tex: yes
+  html_document:
+    fig_caption: yes
 ---
 ```{r,echo=FALSE,warning=FALSE,message=FALSE}
 
@@ -153,7 +153,7 @@ Finally, I decided to use 20 topics by fitting a three-segment linear regression
 
 data.dir <- '../results/topic_models/exploratory/'
 
-files <- list.files(data.dir)
+files <- list.files('../results/topic_models/exploratory/')
 
 ll <- rbind_all(lapply(files,function(file){
   
@@ -235,9 +235,9 @@ The overall topic model lists several topics about customer experience. But good
 ```{r ratings distribution ,echo=FALSE,fig.width=4,fig.height=4, fig.cap="Figure 3. Restaurant review ratings distribution."}
 
 
-percentages <- review %>% group_by(stars) %>% count(stars) %>% mutate(percentage=n/sum(n)*100,stars=factor(stars))
+percentages <- review %>% group_by(stars) %>% count(stars) %>% mutate(percentage=n/sum(n)*100,stars1=factor(stars))
 
-ggplot(percentages,aes(x="",y=percentage,fill=stars))+geom_bar(width = 1,stat="identity")+coord_polar(theta="y")+geom_text(aes(y = percentage/2 + c(0, cumsum(percentage)[-length(percentage)]), label = paste0(round(percentage),"%")), size=4)+theme(axis.text = element_blank(),
+ggplot(percentages,aes(x="",y=percentage,fill=stars1))+geom_bar(width = 1,stat="identity")+coord_polar(theta="y")+geom_text(aes(y = percentage/2 + c(0, cumsum(percentage)[-length(percentage)]), label = paste0(round(percentage),"%")), size=4)+theme(axis.text = element_blank(),
         axis.ticks = element_blank(),
         panel.grid  = element_blank(),
         panel.background = element_blank()
